@@ -2,7 +2,7 @@ import pino from 'pino';
 import { buildApp } from './app.js';
 import { getEnv } from './config/env.js';
 import { connectMongo, disconnectMongo } from './db/mongo.js';
-import { ensureIndexes } from './db/indexes.js';
+import { seedDatabase } from './db/seed.js';
 import { initSocketIO, closeSocketIO } from './lib/socket.js';
 
 // Structured server lifecycle logger
@@ -33,19 +33,10 @@ async function startServer(): Promise<void> {
     const { db } = await connectMongo();
     logger.info({ database: db.databaseName }, 'Successfully connected to MongoDB');
 
-    // 2. Ensure database indexes on startup
-    logger.info('Verifying and ensuring database indexes...');
-    const indexResult = await ensureIndexes(db);
-    logger.info(
-      {
-        createdCount: indexResult.created.length,
-        failedCount: indexResult.failed.length,
-      },
-      'Index synchronization complete'
-    );
-    if (indexResult.failed.length > 0) {
-      logger.warn({ failedIndexes: indexResult.failed }, 'Some indexes could not be created');
-    }
+    // 2. Ensure database indexes & seed initial collections on startup
+    logger.info('Verifying database indexes and seeding initial collections...');
+    const seedResult = await seedDatabase(db);
+    logger.info({ message: seedResult.message }, 'Database initialization complete');
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     if (env.NODE_ENV === 'production') {

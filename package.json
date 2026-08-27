@@ -8,9 +8,10 @@
     "frontend"
   ],
   "scripts": {
-    "dev": "npm --prefix frontend run dev",
+    "dev": "concurrently -n \"BACKEND,FRONTEND\" -c \"bgBlue.bold,bgMagenta.bold\" \"npm:dev:backend\" \"npm:dev:frontend\"",
     "dev:frontend": "npm --prefix frontend run dev",
     "dev:backend": "npm --prefix backend run dev",
+    "seed": "npm --prefix backend run seed",
     "build": "npm --prefix backend run build && npm --prefix frontend run build",
     "build:frontend": "npm --prefix frontend run build",
     "build:backend": "npm --prefix backend run build",
@@ -28,5 +29,8 @@
     "students"
   ],
   "author": "",
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
 }
