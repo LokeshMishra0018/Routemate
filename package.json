@@ -1,0 +1,27 @@
+{
+  "name": "routemate",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RouteMate - Smart Travel Companions for College Students",
+  "workspaces": [
+    "backend"
+  ],
+  "scripts": {
+    "dev": "npm run dev:backend",
+    "dev:backend": "npm --prefix backend run dev",
+    "build": "npm --prefix backend run build",
+    "test": "npm --prefix backend test",
+    "test:backend": "npm --prefix backend test",
+    "typecheck": "npm --prefix backend run typecheck",
+    "lint": "npm --prefix backend run lint"
+  },
+  "keywords": [
+    "routemate",
+    "travel",
+    "ridesharing",
+    "college",
+    "students"
+  ],
+  "author": "",
+  "license": "UNLICENSED"
+}
