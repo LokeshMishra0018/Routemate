@@ -59,12 +59,12 @@ export class ReviewsService {
     let score = 0;
 
     // 1. Email Verification (+20)
-    if (user.isEmailVerified) {
+    if (user.emailVerifiedAt !== null || (user as any).isEmailVerified) {
       score += 20;
     }
 
     // 2. ID Verification (+30)
-    if (profile.verification?.status === 'approved') {
+    if (profile.verificationStatus === 'approved' || (profile as any).verification?.status === 'approved') {
       score += 30;
     }
 
@@ -86,6 +86,7 @@ export class ReviewsService {
       {
         $set: {
           trustScore: finalTrustScore,
+          averageRating: ratingSummary.averageRating,
           rating: {
             average: ratingSummary.averageRating,
             count: ratingSummary.totalReviews,

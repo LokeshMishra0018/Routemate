@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  # -------------------------------------------------------------
+  # PostgreSQL with PostGIS Geospatial Extension
+  # -------------------------------------------------------------
+  postgres:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: routemate-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-routemate}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password_dev}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d routemate"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - routemate-network
+
+  # -------------------------------------------------------------
+  # Redis Cache & Realtime Queue
+  # -------------------------------------------------------------
+  redis:
+    image: redis:7.2-alpine
+    container_name: routemate-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - routemate-network
+
+  # -------------------------------------------------------------
+  # Fastify Node.js Backend API
+  # -------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: routemate-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      HOST: 0.0.0.0
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres_password_dev}@postgres:5432/${POSTGRES_DB:-routemate}?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-routemate_production_super_secret_jwt_key_2026_x!}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-routemate_production_super_secret_refresh_key_2026_y!}
+      CORS_ORIGIN: http://localhost:80,http://localhost:5173,http://localhost
+    ports:
+      - "5000:5000"
+    networks:
+      - routemate-network
+
+  # -------------------------------------------------------------
+  # React Nginx Frontend Web Application
+  # -------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: routemate-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    networks:
+      - routemate-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  routemate-network:
+    driver: bridge
