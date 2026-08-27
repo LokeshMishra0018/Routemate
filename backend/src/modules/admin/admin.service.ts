@@ -1,9 +1,13 @@
 import { adminRepository } from './admin.repository.js';
 import { verificationRepository } from '../verification/verification.repository.js';
 import { usersRepository } from '../users/users.repository.js';
+import { safetyRepository } from '../safety/safety.repository.js';
 import { getEmailProvider } from '../../lib/email/email.interface.js';
 import { NotFoundError, ValidationError } from '../../utils/errors.js';
 import { ReviewVerificationInput } from './admin.types.js';
+import type { ReportCategory, ReportStatus, SosStatus, ReportDocument } from '../safety/safety.types.js';
+import { getDb } from '../../db/mongo.js';
+import { COLLECTIONS } from '../../db/collections.js';
 
 export class AdminService {
   /**
@@ -193,6 +197,177 @@ export class AdminService {
         totalPages: Math.ceil(totalCount / pageSize) || 1,
         hasNextPage: page * pageSize < totalCount,
       },
+    };
+  }
+
+  /**
+   * List safety reports
+   */
+  async listReports(
+    page = 1,
+    pageSize = 20,
+    category?: ReportCategory,
+    status?: ReportStatus
+  ) {
+    const { items, totalCount } = await safetyRepository.findReports(category, status, page, pageSize);
+
+    return {
+      items: items.map((r) => ({
+        id: r._id.toHexString(),
+        reporterId: r.reporterId,
+        reportedUserId: r.reportedUserId || null,
+        tripId: r.tripId || null,
+        category: r.category,
+        reason: r.reason,
+        evidenceUrls: r.evidenceUrls || null,
+        status: r.status,
+        resolutionNotes: r.resolutionNotes || null,
+        resolvedBy: r.resolvedBy || null,
+        resolvedAt: r.resolvedAt ? r.resolvedAt.toISOString() : null,
+        createdAt: r.createdAt.toISOString(),
+        updatedAt: r.updatedAt.toISOString(),
+      })),
+      pagination: {
+        page,
+        pageSize,
+        totalCount,
+        totalPages: Math.ceil(totalCount / pageSize) || 1,
+        hasNextPage: page * pageSize < totalCount,
+      },
+    };
+  }
+
+  /**
+   * Review and resolve a safety report
+   */
+  async reviewReport(
+    actorUserId: string,
+    reportId: string,
+    input: { status: 'under_review' | 'resolved' | 'dismissed'; resolutionNotes?: string; actionUser?: 'none' | 'suspend' }
+  ) {
+    const report = await safetyRepository.findReportById(reportId);
+    if (!report) {
+      throw new NotFoundError('Report not found');
+    }
+
+    const updated = await safetyRepository.updateReportStatus(
+      reportId,
+      input.status,
+      actorUserId,
+      input.resolutionNotes
+    );
+
+    if (input.actionUser === 'suspend' && report.reportedUserId) {
+      await this.suspendUser(actorUserId, report.reportedUserId, `Suspension from report ${reportId}: ${input.resolutionNotes || 'Violations'}`);
+    }
+
+    await adminRepository.logAction({
+      actorUserId,
+      actionType: 'report_resolved',
+      targetUserId: report.reportedUserId || null,
+      targetResourceId: reportId,
+      metadata: { status: input.status, actionUser: input.actionUser },
+      createdAt: new Date(),
+    });
+
+    return updated;
+  }
+
+  /**
+   * List SOS events
+   */
+  async listSosEvents(
+    page = 1,
+    pageSize = 20,
+    status?: SosStatus
+  ) {
+    const { items, totalCount } = await safetyRepository.findSosEvents(status, page, pageSize);
+
+    return {
+      items: items.map((s) => ({
+        id: s._id.toHexString(),
+        userId: s.userId,
+        tripId: s.tripId || null,
+        location: s.location || null,
+        status: s.status,
+        triggeredAt: s.triggeredAt.toISOString(),
+        resolvedAt: s.resolvedAt ? s.resolvedAt.toISOString() : null,
+        resolvedBy: s.resolvedBy || null,
+        resolutionNotes: s.resolutionNotes || null,
+      })),
+      pagination: {
+        page,
+        pageSize,
+        totalCount,
+        totalPages: Math.ceil(totalCount / pageSize) || 1,
+        hasNextPage: page * pageSize < totalCount,
+      },
+    };
+  }
+
+  /**
+   * Resolve an SOS event
+   */
+  async resolveSosEvent(
+    actorUserId: string,
+    sosId: string,
+    input: { status: 'resolved' | 'false_alarm'; resolutionNotes?: string }
+  ) {
+    const updated = await safetyRepository.resolveSosEvent(
+      sosId,
+      input.status,
+      actorUserId,
+      input.resolutionNotes
+    );
+    if (!updated) {
+      throw new NotFoundError('SOS event not found');
+    }
+
+    await adminRepository.logAction({
+      actorUserId,
+      actionType: 'sos_resolved',
+      targetUserId: updated.userId,
+      targetResourceId: sosId,
+      metadata: { status: input.status, resolutionNotes: input.resolutionNotes },
+      createdAt: new Date(),
+    });
+
+    return updated;
+  }
+
+  /**
+   * Safety history audit for user
+   */
+  async getUserSafetyHistory(userId: string) {
+    const db = getDb();
+
+    const [user, profile, reportsAgainst, reportsBy, sosEvents] = await Promise.all([
+      usersRepository.findUserById(userId),
+      db.collection(COLLECTIONS.PROFILES).findOne({ userId }),
+      db.collection<ReportDocument>(COLLECTIONS.REPORTS).find({ reportedUserId: userId }).toArray(),
+      db.collection<ReportDocument>(COLLECTIONS.REPORTS).find({ reporterId: userId }).toArray(),
+      db.collection(COLLECTIONS.SOS_EVENTS).find({ userId }).toArray(),
+    ]);
+
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    return {
+      userId,
+      email: user.email,
+      status: user.status,
+      trustScore: profile?.trustScore || 0,
+      verificationStatus: profile?.verification?.status || 'unverified',
+      reportsAgainstCount: reportsAgainst.length,
+      reportsByCount: reportsBy.length,
+      sosEventsCount: sosEvents.length,
+      reportsAgainst: reportsAgainst.map((r) => ({
+        id: r._id.toHexString(),
+        category: r.category,
+        status: r.status,
+        createdAt: r.createdAt.toISOString(),
+      })),
     };
   }
 }

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const geoPointSchema = z.object({
+export const geoPointSchema = z.object({
   type: z.literal('Point').default('Point'),
   coordinates: z
     .tuple([
@@ -9,7 +9,7 @@ const geoPointSchema = z.object({
     ]),
 });
 
-const locationPointSchema = z.object({
+export const locationPointSchema = z.object({
   name: z.string().min(1, 'Location name is required').max(150).trim(),
   coordinates: geoPointSchema,
 });

@@ -146,6 +146,20 @@ export const REQUIRED_INDEXES: IndexDefinition[] = [
     indexSpec: { expiresAt: 1 },
     options: { expireAfterSeconds: 0, name: 'idx_sessions_expiresAt_ttl' },
   },
+
+  // Emergency Contacts Collection
+  {
+    collection: COLLECTIONS.EMERGENCY_CONTACTS,
+    indexSpec: { userId: 1, isPrimary: -1 },
+    options: { name: 'idx_emergency_contacts_userId_isPrimary' },
+  },
+
+  // SOS Events Collection
+  {
+    collection: COLLECTIONS.SOS_EVENTS,
+    indexSpec: { status: 1, triggeredAt: -1 },
+    options: { name: 'idx_sos_events_status_triggeredAt' },
+  },
 ];
 
 /**

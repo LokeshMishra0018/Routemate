@@ -22,6 +22,8 @@ export const COLLECTIONS = {
   BADGES: 'badges',
   USER_BADGES: 'userBadges',
   SESSIONS: 'sessions',
+  EMERGENCY_CONTACTS: 'emergencyContacts',
+  SOS_EVENTS: 'sosEvents',
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];

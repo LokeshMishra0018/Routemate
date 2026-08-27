@@ -8,7 +8,9 @@ export interface AdminActionDocument {
     | 'verification_rejected'
     | 'user_suspended'
     | 'user_unsuspended'
-    | 'role_changed';
+    | 'role_changed'
+    | 'report_resolved'
+    | 'sos_resolved';
   targetUserId: string | null;
   targetResourceId: string | null;
   metadata?: Record<string, unknown>;

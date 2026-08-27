@@ -1,9 +1,10 @@
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { adminService } from './admin.service.js';
-import { reviewVerificationSchema, suspendUserSchema } from './admin.schemas.js';
+import { reviewVerificationSchema, suspendUserSchema, reviewReportSchema, resolveSosSchema } from './admin.schemas.js';
 import { authenticate, requireRole } from '../../middleware/auth.js';
 import { validateRequest, paginationQuerySchema } from '../../plugins/validation.js';
 import { createSuccessResponse, createPaginatedResponse } from '../../utils/response.js';
+import type { ReportCategory, ReportStatus, SosStatus } from '../safety/safety.types.js';
 
 export const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance): Promise<void> => {
   // GET /api/v1/admin/verifications - List pending verifications
@@ -92,6 +93,99 @@ export const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance): Pro
 
       const result = await adminService.getAuditLogs(page, pageSize);
       return reply.status(200).send(createPaginatedResponse(result.items, result.pagination));
+    }
+  );
+
+  // GET /api/v1/admin/reports - List safety reports
+  app.get(
+    '/reports',
+    {
+      preHandler: [authenticate, requireRole('moderator', 'admin')],
+    },
+    async (request, reply) => {
+      const query = request.query as {
+        page?: string;
+        pageSize?: string;
+        category?: ReportCategory;
+        status?: ReportStatus;
+      };
+      const page = query.page ? parseInt(query.page, 10) : 1;
+      const pageSize = query.pageSize ? parseInt(query.pageSize, 10) : 20;
+
+      const result = await adminService.listReports(page, pageSize, query.category, query.status);
+      return reply.status(200).send(createPaginatedResponse(result.items, result.pagination));
+    }
+  );
+
+  // PATCH /api/v1/admin/reports/:id - Review and resolve report
+  app.patch(
+    '/reports/:id',
+    {
+      preHandler: [authenticate, requireRole('moderator', 'admin')],
+      preValidation: [validateRequest({ body: reviewReportSchema })],
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const body = request.body as {
+        status: 'under_review' | 'resolved' | 'dismissed';
+        resolutionNotes?: string;
+        actionUser?: 'none' | 'suspend';
+      };
+
+      const result = await adminService.reviewReport(request.user!.id, id, body);
+      return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
+
+  // GET /api/v1/admin/sos-events - List SOS events
+  app.get(
+    '/sos-events',
+    {
+      preHandler: [authenticate, requireRole('moderator', 'admin')],
+    },
+    async (request, reply) => {
+      const query = request.query as {
+        page?: string;
+        pageSize?: string;
+        status?: SosStatus;
+      };
+      const page = query.page ? parseInt(query.page, 10) : 1;
+      const pageSize = query.pageSize ? parseInt(query.pageSize, 10) : 20;
+
+      const result = await adminService.listSosEvents(page, pageSize, query.status);
+      return reply.status(200).send(createPaginatedResponse(result.items, result.pagination));
+    }
+  );
+
+  // PATCH /api/v1/admin/sos-events/:id - Resolve SOS event
+  app.patch(
+    '/sos-events/:id',
+    {
+      preHandler: [authenticate, requireRole('moderator', 'admin')],
+      preValidation: [validateRequest({ body: resolveSosSchema })],
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const body = request.body as {
+        status: 'resolved' | 'false_alarm';
+        resolutionNotes?: string;
+      };
+
+      const result = await adminService.resolveSosEvent(request.user!.id, id, body);
+      return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
+
+  // GET /api/v1/admin/users/:id/safety-history - Complete safety audit trail for user
+  app.get(
+    '/users/:id/safety-history',
+    {
+      preHandler: [authenticate, requireRole('moderator', 'admin')],
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const result = await adminService.getUserSafetyHistory(id);
+      return reply.status(200).send(createSuccessResponse(result));
     }
   );
 };

@@ -9,7 +9,6 @@ describe('Phase 3 Deep Testing & Edge Cases (Integration)', () => {
   let studentToken: string;
   let companionToken: string;
 
-  const today = new Date().toISOString().split('T')[0];
   const datePlus1 = new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const datePlus5 = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const datePlus10 = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
