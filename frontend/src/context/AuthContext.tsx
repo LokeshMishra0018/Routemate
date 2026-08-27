@@ -1,0 +1,120 @@
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { User, UserProfile } from '../types';
+import { apiClient, setAuthToken, getAuthToken } from '../services/api.client';
+
+interface AuthContextType {
+  user: User | null;
+  profile: UserProfile | null;
+  isLoading: boolean;
+  isAuthenticated: boolean;
+  login: (email: string, password: string) => Promise<User>;
+  register: (data: { email: string; password: string; fullName: string; collegeId?: string }) => Promise<{ userId: string }>;
+  logout: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
+  updateProfileState: (updated: Partial<UserProfile>) => void;
+}
+
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchCurrentUser = useCallback(async () => {
+    try {
+      const res = await apiClient.get('/users/me');
+      const data = res.data.data;
+      setUser(data.user);
+      setProfile(data.profile);
+    } catch {
+      setUser(null);
+      setProfile(null);
+      setAuthToken(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const token = getAuthToken();
+    if (token) {
+      fetchCurrentUser();
+    } else {
+      setIsLoading(false);
+    }
+
+    const handleUnauthorized = () => {
+      setUser(null);
+      setProfile(null);
+    };
+
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+  }, [fetchCurrentUser]);
+
+  const login = async (email: string, password: string) => {
+    setIsLoading(true);
+    try {
+      const res = await apiClient.post('/auth/login', { email, password });
+      const { accessToken, user: loggedUser, profile: userProfile } = res.data.data;
+      setAuthToken(accessToken);
+      setUser(loggedUser);
+      setProfile(userProfile);
+      return loggedUser;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const register = async (data: { email: string; password: string; fullName: string; collegeId?: string }) => {
+    const res = await apiClient.post('/auth/register', data);
+    return res.data.data;
+  };
+
+  const logout = async () => {
+    try {
+      await apiClient.post('/auth/logout');
+    } catch {
+      // Ignore network failure on logout
+    } finally {
+      setAuthToken(null);
+      setUser(null);
+      setProfile(null);
+    }
+  };
+
+  const refreshProfile = async () => {
+    await fetchCurrentUser();
+  };
+
+  const updateProfileState = (updated: Partial<UserProfile>) => {
+    setProfile((prev) => (prev ? { ...prev, ...updated } : null));
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        profile,
+        isLoading,
+        isAuthenticated: !!user,
+        login,
+        register,
+        logout,
+        refreshProfile,
+        updateProfileState,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};

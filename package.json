@@ -4,16 +4,21 @@
   "private": true,
   "description": "RouteMate - Smart Travel Companions for College Students",
   "workspaces": [
-    "backend"
+    "backend",
+    "frontend"
   ],
   "scripts": {
-    "dev": "npm run dev:backend",
+    "dev": "npm --prefix frontend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
     "dev:backend": "npm --prefix backend run dev",
-    "build": "npm --prefix backend run build",
-    "test": "npm --prefix backend test",
+    "build": "npm --prefix backend run build && npm --prefix frontend run build",
+    "build:frontend": "npm --prefix frontend run build",
+    "build:backend": "npm --prefix backend run build",
+    "test": "npm --prefix backend test && npm --prefix frontend test",
+    "test:frontend": "npm --prefix frontend test",
     "test:backend": "npm --prefix backend test",
-    "typecheck": "npm --prefix backend run typecheck",
-    "lint": "npm --prefix backend run lint"
+    "typecheck": "npm --prefix backend run typecheck && npm --prefix frontend run typecheck",
+    "lint": "npm --prefix backend run lint && npm --prefix frontend run lint"
   },
   "keywords": [
     "routemate",
