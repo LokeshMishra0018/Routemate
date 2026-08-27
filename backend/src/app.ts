@@ -19,6 +19,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   const env = options.env || getEnv();
 
   const isTest = env.NODE_ENV === 'test';
+  const isDev = env.NODE_ENV === 'development';
 
   const app = Fastify({
     logger: isTest
@@ -36,17 +37,16 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
             ],
             censor: '[REDACTED]',
           },
-          transport:
-            env.NODE_ENV === 'development'
-              ? {
-                  target: 'pino-pretty',
-                  options: {
-                    colorize: true,
-                    translateTime: 'HH:MM:ss Z',
-                    ignore: 'pid,hostname',
-                  },
-                }
-              : undefined,
+          transport: isDev
+            ? {
+                target: 'pino-pretty',
+                options: {
+                  colorize: true,
+                  translateTime: 'HH:MM:ss Z',
+                  ignore: 'pid,hostname',
+                },
+              }
+            : undefined,
         },
     genReqId: (req) => {
       const headerReqId = req.headers['x-request-id'];
@@ -63,8 +63,22 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   app.setErrorHandler(errorHandler);
   app.setNotFoundHandler(notFoundHandler);
 
+  // Guarantee X-Request-ID response header on all outgoing HTTP responses
+  app.addHook('onSend', async (request, reply) => {
+    reply.header('x-request-id', request.id);
+  });
+
   // Security Plugins (CORS, Helmet, Rate Limiter, Cookies)
   await registerSecurityPlugins(app, env);
+
+  // Multipart parser for private document uploads
+  const multipart = (await import('@fastify/multipart')).default;
+  await app.register(multipart, {
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5MB limit
+      files: 1,
+    },
+  });
 
   // Application Routes
   await registerRoutes(app);

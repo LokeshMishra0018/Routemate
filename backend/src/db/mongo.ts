@@ -12,6 +12,10 @@ export interface MongoHealthStatus {
   error?: string;
 }
 
+export function sanitizeMongoError(message: string): string {
+  return message.replace(/mongodb(\+srv)?:\/\/[^@\s]+@/gi, 'mongodb$1://[REDACTED]@');
+}
+
 /**
  * Connect to MongoDB Atlas / Local MongoDB instance
  */
@@ -37,7 +41,6 @@ export async function connectMongo(customUri?: string, customDbName?: string): P
     db = client.db(dbName);
     isConnected = true;
 
-    // Optional connection lifecycle listeners
     client.on('connectionClosed', () => {
       isConnected = false;
     });
@@ -51,7 +54,9 @@ export async function connectMongo(customUri?: string, customDbName?: string): P
     isConnected = false;
     client = null;
     db = null;
-    throw error;
+    const sanitizedMsg = sanitizeMongoError(error instanceof Error ? error.message : String(error));
+    const safeError = new Error(sanitizedMsg);
+    throw safeError;
   }
 }
 
@@ -94,11 +99,11 @@ export async function checkMongoHealth(): Promise<MongoHealthStatus> {
       pingMs,
     };
   } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
+    const rawError = err instanceof Error ? err.message : String(err);
     return {
       connected: false,
       databaseName: db?.databaseName,
-      error: errorMsg,
+      error: sanitizeMongoError(rawError),
     };
   }
 }
@@ -108,10 +113,13 @@ export async function checkMongoHealth(): Promise<MongoHealthStatus> {
  */
 export async function disconnectMongo(): Promise<void> {
   if (client) {
-    await client.close();
-    client = null;
-    db = null;
-    isConnected = false;
+    try {
+      await client.close();
+    } finally {
+      client = null;
+      db = null;
+      isConnected = false;
+    }
   }
 }
 

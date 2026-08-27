@@ -1,11 +1,12 @@
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { checkMongoHealth } from '../db/mongo.js';
-import { createSuccessResponse } from '../utils/response.js';
+import { createSuccessResponse, createErrorResponse } from '../utils/response.js';
 
 export const healthRoutes: FastifyPluginAsync = async (app: FastifyInstance): Promise<void> => {
   /**
    * GET /health - Liveness probe
-   * Returns immediately if the Fastify process is running and responding.
+   * Returns 200 immediately if the Fastify process is running and responding.
+   * Does NOT depend on MongoDB or external services.
    */
   app.get('/health', async (_request, reply) => {
     return reply.status(200).send(
@@ -21,33 +22,42 @@ export const healthRoutes: FastifyPluginAsync = async (app: FastifyInstance): Pr
 
   /**
    * GET /ready - Readiness probe
-   * Returns 200 if dependent services (MongoDB) are reachable, 503 Service Unavailable otherwise.
+   * Returns 200 only when MongoDB is connected and ping succeeds.
+   * Returns 503 Service Unavailable with standard error payload when MongoDB is offline.
    */
   app.get('/ready', async (_request, reply) => {
     const mongoStatus = await checkMongoHealth();
 
-    const isReady = mongoStatus.connected;
-    const statusCode = isReady ? 200 : 503;
+    if (!mongoStatus.connected) {
+      return reply.status(503).send(
+        createErrorResponse(
+          'SERVICE_UNAVAILABLE',
+          'Service is not ready to accept traffic. Database dependency is offline.',
+          {
+            dependencies: {
+              mongodb: {
+                connected: false,
+                ...(mongoStatus.error ? { error: mongoStatus.error } : {}),
+              },
+            },
+          }
+        )
+      );
+    }
 
-    return reply.status(statusCode).send({
-      success: isReady,
-      data: {
-        status: isReady ? 'ready' : 'unhealthy',
+    return reply.status(200).send(
+      createSuccessResponse({
+        status: 'ready',
         service: 'routemate-backend',
         timestamp: new Date().toISOString(),
         dependencies: {
-          mongodb: mongoStatus,
+          mongodb: {
+            connected: true,
+            databaseName: mongoStatus.databaseName,
+            pingMs: mongoStatus.pingMs,
+          },
         },
-      },
-      ...(!isReady
-        ? {
-            error: {
-              code: 'SERVICE_UNAVAILABLE',
-              message: 'Service is not ready to accept traffic. Dependencies are offline.',
-              details: { mongodb: mongoStatus },
-            },
-          }
-        : {}),
-    });
+      })
+    );
   });
 };

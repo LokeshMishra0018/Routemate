@@ -5,5 +5,6 @@
 2. **Defensive Validation:** All request inputs (body, query, params, headers) are validated via Zod schemas before reaching business logic handlers.
 3. **No Secret Leaks:** Fastify logger automatically redacts sensitive attributes (`password`, `passwordHash`, `token`, `refreshToken`, `authorization`, `cookie`).
 4. **Security Headers:** `@fastify/helmet` enforces `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, and strict HTTPS HSTS in production.
-5. **CORS Isolation:** Explicit origin whitelisting configured via `CORS_ORIGIN`. Unrestricted wildcard `*` is disabled for authenticated requests.
-6. **Rate Limiting:** Protects endpoints against brute-force and resource exhaustion attacks.
+5. **CORS Isolation:** Explicit origin whitelisting configured via `CORS_ORIGIN`. Unrestricted wildcard `*` is forbidden in production when credentials are enabled. Disallowed origins receive clean `403 Forbidden` responses without leaking stack traces.
+6. **Rate Limiting:** Protects endpoints against brute-force and resource exhaustion attacks. Localhost is not exempt by default; exemptions must be explicitly configured via `RATE_LIMIT_ALLOW_LIST`.
+7. **Traceability:** `X-Request-ID` is preserved or generated on every HTTP request and returned in response headers for distributed tracing and audit logs.

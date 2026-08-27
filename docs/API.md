@@ -3,7 +3,12 @@
 ## Base URL
 `/api/v1`
 
-## Response Format
+## Response Headers
+Every response includes:
+- `X-Request-ID`: Client-provided request ID or server-generated UUID.
+- Standard security headers: `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`.
+
+## Standard Response Envelopes
 
 ### Success Response
 ```json
@@ -50,7 +55,8 @@
 ### 1. Liveness Probe
 - **Path:** `GET /health`
 - **Auth:** Public
-- **Description:** Checks if the Node.js / Fastify process is alive.
+- **Description:** Checks if the Node.js / Fastify process is running and responding. Does not depend on external databases.
+- **Status Code:** `200 OK`
 - **Response:**
   ```json
   {
@@ -68,8 +74,8 @@
 ### 2. Readiness Probe
 - **Path:** `GET /ready`
 - **Auth:** Public
-- **Description:** Checks connectivity to database dependencies (MongoDB Atlas).
-- **Response (Ready):**
+- **Description:** Verifies connectivity to the database dependency (MongoDB Atlas ping).
+- **Status Code (Database Connected):** `200 OK`
   ```json
   {
     "success": true,
@@ -87,8 +93,25 @@
     }
   }
   ```
+- **Status Code (Database Unavailable):** `503 Service Unavailable`
+  ```json
+  {
+    "success": false,
+    "error": {
+      "code": "SERVICE_UNAVAILABLE",
+      "message": "Service is not ready to accept traffic. Database dependency is offline.",
+      "details": {
+        "dependencies": {
+          "mongodb": {
+            "connected": false
+          }
+        }
+      }
+    }
+  }
+  ```
 
 ### 3. API v1 Root
 - **Path:** `GET /api/v1`
 - **Auth:** Public
-- **Description:** Returns API version information.
+- **Description:** Returns API version and service metadata.
