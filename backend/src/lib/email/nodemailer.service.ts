@@ -19,7 +19,7 @@ export class NodemailerEmailProvider implements EmailProvider {
       const smtpUser = env.SMTP_USER.trim();
       const smtpPass = env.SMTP_PASS.replace(/\s+/g, '').replace(/["']/g, '').trim();
       const host = env.SMTP_HOST || 'smtp.gmail.com';
-      const port = env.SMTP_PORT || 465;
+      const port = env.SMTP_PORT || 587;
       const secure = env.SMTP_SECURE !== undefined ? env.SMTP_SECURE : port === 465;
 
       this.transporter = nodemailer.createTransport({
@@ -51,7 +51,7 @@ export class NodemailerEmailProvider implements EmailProvider {
       return true;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error('[SMTP][INIT] ❌ SMTP transport verification failed:', message);
+      console.error('[SMTP][INIT] ❌ Primary SMTP transport verification failed:', message);
       return false;
     }
   }
@@ -118,8 +118,39 @@ export class NodemailerEmailProvider implements EmailProvider {
         html: htmlContent,
       });
       console.log(`[EMAIL][SUCCESS] Sent verification email to ${to}. MessageId: ${info.messageId}`);
-    } catch (err) {
-      console.error('[EMAIL][ERROR] Failed to send email via SMTP transporter:', err);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[EMAIL][ERROR] Primary SMTP send failed:', msg);
+
+      // Automatic Fallback to Port 587 STARTTLS
+      if (env.SMTP_USER && env.SMTP_PASS) {
+        console.log('[EMAIL][RETRY] Retrying delivery via fallback port 587 (STARTTLS)...');
+        try {
+          const fallbackTransporter = nodemailer.createTransport({
+            host: 'smtp.gmail.com',
+            port: 587,
+            secure: false,
+            auth: {
+              user: env.SMTP_USER.trim(),
+              pass: env.SMTP_PASS.replace(/\s+/g, '').replace(/["']/g, '').trim(),
+            },
+            connectionTimeout: 10000,
+            greetingTimeout: 10000,
+            socketTimeout: 15000,
+          });
+          const fallbackInfo = await fallbackTransporter.sendMail({
+            from: fromAddress,
+            to,
+            subject: `RouteMate Verification Code: ${otp}`,
+            text: `Hello ${studentName},\n\nYour RouteMate 6-digit verification code is: ${otp}\n\nThis code expires in 10 minutes.\n\nRouteMate Team`,
+            html: htmlContent,
+          });
+          console.log(`[EMAIL][SUCCESS] Fallback port 587 successfully sent email to ${to}. MessageId: ${fallbackInfo.messageId}`);
+        } catch (fallbackErr: unknown) {
+          const fallbackMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+          console.error('[EMAIL][ERROR] Fallback port 587 also failed:', fallbackMsg);
+        }
+      }
     }
   }
 
@@ -183,8 +214,9 @@ export class NodemailerEmailProvider implements EmailProvider {
         html: htmlContent,
       });
       console.log(`[EMAIL][SUCCESS] Sent password reset email to ${to}. MessageId: ${info.messageId}`);
-    } catch (err) {
-      console.error('[EMAIL][ERROR] Failed to send email via SMTP transporter:', err);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[EMAIL][ERROR] Primary reset email send failed:', msg);
     }
   }
 
@@ -206,8 +238,9 @@ export class NodemailerEmailProvider implements EmailProvider {
         subject: `RouteMate ID Verification ${status === 'approved' ? 'Approved ✅' : 'Rejected ❌'}`,
         text: `Your college ID verification has been ${status}.${reason ? ` Reason: ${reason}` : ''}`,
       });
-    } catch (err) {
-      console.error('[EMAIL][ERROR] Failed to send verification status email:', err);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[EMAIL][ERROR] Failed to send verification status email:', msg);
     }
   }
 }
