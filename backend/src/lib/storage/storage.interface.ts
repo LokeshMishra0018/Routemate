@@ -48,29 +48,70 @@ export class LocalStorageProvider implements StorageProvider {
     };
   }
 
-  async getPrivateFileBuffer(storageKey: string): Promise<{ buffer: Buffer; mimeType: string } | null> {
-    const filePath = path.join(this.baseDir, storageKey);
-    try {
-      const buffer = await fs.readFile(filePath);
-      const meta = this.metadataMap.get(storageKey);
-      return {
-        buffer,
-        mimeType: meta?.mimeType || 'application/octet-stream',
-      };
-    } catch {
-      return null;
+  private getMimeFromExtension(filename: string): string {
+    const ext = path.extname(filename).toLowerCase();
+    switch (ext) {
+      case '.png':
+        return 'image/png';
+      case '.jpg':
+      case '.jpeg':
+        return 'image/jpeg';
+      case '.webp':
+        return 'image/webp';
+      case '.pdf':
+        return 'application/pdf';
+      case '.svg':
+        return 'image/svg+xml';
+      default:
+        return 'application/octet-stream';
     }
   }
 
-  async deletePrivateFile(storageKey: string): Promise<boolean> {
-    const filePath = path.join(this.baseDir, storageKey);
-    try {
-      await fs.unlink(filePath);
-      this.metadataMap.delete(storageKey);
-      return true;
-    } catch {
-      return false;
+  async getPrivateFileBuffer(storageKey: string): Promise<{ buffer: Buffer; mimeType: string } | null> {
+    const candidates = [
+      path.join(this.baseDir, storageKey),
+      path.resolve(process.cwd(), 'uploads/private', storageKey),
+      path.resolve(process.cwd(), 'backend/uploads/private', storageKey),
+      path.resolve(process.cwd(), '../backend/uploads/private', storageKey),
+      path.resolve(process.cwd(), '../uploads/private', storageKey),
+    ];
+
+    for (const filePath of candidates) {
+      try {
+        const buffer = await fs.readFile(filePath);
+        const meta = this.metadataMap.get(storageKey);
+        const mimeType = meta?.mimeType || this.getMimeFromExtension(storageKey);
+        return {
+          buffer,
+          mimeType,
+        };
+      } catch {
+        // try next candidate path
+      }
     }
+
+    return null;
+  }
+
+  async deletePrivateFile(storageKey: string): Promise<boolean> {
+    const candidates = [
+      path.join(this.baseDir, storageKey),
+      path.resolve(process.cwd(), 'uploads/private', storageKey),
+      path.resolve(process.cwd(), 'backend/uploads/private', storageKey),
+      path.resolve(process.cwd(), '../backend/uploads/private', storageKey),
+    ];
+
+    let deleted = false;
+    for (const filePath of candidates) {
+      try {
+        await fs.unlink(filePath);
+        deleted = true;
+      } catch {
+        // continue
+      }
+    }
+    this.metadataMap.delete(storageKey);
+    return deleted;
   }
 }
 
