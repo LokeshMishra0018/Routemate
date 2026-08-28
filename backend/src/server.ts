@@ -1,9 +1,15 @@
+import dns from 'node:dns';
 import pino from 'pino';
 import { buildApp } from './app.js';
 import { getEnv } from './config/env.js';
 import { connectMongo, disconnectMongo } from './db/mongo.js';
 import { seedDatabase } from './db/seed.js';
 import { initSocketIO, closeSocketIO } from './lib/socket.js';
+
+// Force IPv4 resolution to prevent ENETUNREACH on cloud containers with no IPv6 gateway
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 // Structured server lifecycle logger
 const env = getEnv();

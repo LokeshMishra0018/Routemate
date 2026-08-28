@@ -33,7 +33,7 @@ export class NodemailerEmailProvider implements EmailProvider {
         connectionTimeout: 8000,
         greetingTimeout: 8000,
         socketTimeout: 10000,
-      });
+      } as any);
     }
     return this.transporter;
   }
@@ -233,7 +233,7 @@ export class NodemailerEmailProvider implements EmailProvider {
             connectionTimeout: 8000,
             greetingTimeout: 8000,
             socketTimeout: 10000,
-          });
+          } as any);
           const fallbackInfo = await fallbackTransporter.sendMail({
             from: fromAddress,
             to,
