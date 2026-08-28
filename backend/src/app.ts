@@ -93,6 +93,10 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   // Security Plugins (CORS, Helmet, Rate Limiter, Cookies)
   await registerSecurityPlugins(app, env);
 
+  // Observability & Request Metrics Hook
+  const { registerMetricsHook } = await import('./middleware/metrics.js');
+  await registerMetricsHook(app);
+
   // Multipart parser for private document uploads
   const multipart = (await import('@fastify/multipart')).default;
   await app.register(multipart, {

@@ -24,6 +24,8 @@ export const COLLECTIONS = {
   SESSIONS: 'sessions',
   EMERGENCY_CONTACTS: 'emergencyContacts',
   SOS_EVENTS: 'sosEvents',
+  ACTIVITY_LOGS: 'activityLogs',
+  SEARCH_LOGS: 'searchLogs',
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];

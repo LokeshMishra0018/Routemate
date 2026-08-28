@@ -229,4 +229,154 @@ export const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance): Pro
       return reply.status(200).send(createSuccessResponse(result));
     }
   );
+
+  // ==========================================
+  // COMMAND CENTER: REALTIME & ANALYTICS APIs
+  // ==========================================
+
+  // GET /api/v1/admin/live/users - Real-time active users & current action telemetry
+  app.get(
+    '/live/users',
+    {
+      preHandler: [authenticate, requireRole('moderator', 'admin')],
+    },
+    async (_request, reply) => {
+      const result = await adminService.getLivePresence();
+      return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
+
+  // GET /api/v1/admin/live/events - Real-time chronological platform action stream
+  app.get(
+    '/live/events',
+    {
+      preHandler: [authenticate, requireRole('moderator', 'admin')],
+    },
+    async (request, reply) => {
+      const query = request.query as { limit?: string };
+      const limit = query.limit ? parseInt(query.limit, 10) : 50;
+      const result = await adminService.getLiveEventStream(limit);
+      return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
+
+  // GET /api/v1/admin/stats/overview - High-level Executive & Mobility KPI overview
+  app.get(
+    '/stats/overview',
+    {
+      preHandler: [authenticate, requireRole('moderator', 'admin')],
+    },
+    async (_request, reply) => {
+      const result = await adminService.getOverviewAnalytics();
+      return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
+
+  // GET /api/v1/admin/analytics/funnel - 6-stage user onboarding and retention funnel
+  app.get(
+    '/analytics/funnel',
+    {
+      preHandler: [authenticate, requireRole('moderator', 'admin')],
+    },
+    async (_request, reply) => {
+      const result = await adminService.getUserFunnelAnalytics();
+      return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
+
+  // GET /api/v1/admin/analytics/demand - Search volume & unmet route demand
+  app.get(
+    '/analytics/demand',
+    {
+      preHandler: [authenticate, requireRole('moderator', 'admin')],
+    },
+    async (_request, reply) => {
+      const result = await adminService.getSearchDemandAnalytics();
+      return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
+
+  // GET /api/v1/admin/analytics/system - Real-time system health, RPM, and latency
+  app.get(
+    '/analytics/system',
+    {
+      preHandler: [authenticate, requireRole('moderator', 'admin')],
+    },
+    async (_request, reply) => {
+      const result = await adminService.getSystemHealth();
+      return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
+
+  // GET /api/v1/admin/trips - Master trip registry with filters & seat occupancy
+  app.get(
+    '/trips',
+    {
+      preHandler: [authenticate, requireRole('moderator', 'admin')],
+    },
+    async (request, reply) => {
+      const query = request.query as {
+        page?: string;
+        pageSize?: string;
+        status?: string;
+        vehicleType?: string;
+        search?: string;
+      };
+      const page = query.page ? parseInt(query.page, 10) : 1;
+      const pageSize = query.pageSize ? parseInt(query.pageSize, 10) : 20;
+
+      const result = await adminService.listAdminTrips(page, pageSize, {
+        status: query.status,
+        vehicleType: query.vehicleType,
+        search: query.search,
+      });
+      return reply.status(200).send(createPaginatedResponse(result.items, result.pagination));
+    }
+  );
+
+  // POST /api/v1/admin/trips/:id/cancel - Force cancel trip with reason & audit log
+  app.post(
+    '/trips/:id/cancel',
+    {
+      preHandler: [authenticate, requireRole('admin')],
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const body = (request.body as { reason?: string }) || {};
+      const result = await adminService.cancelTripByAdmin(
+        request.user!.id,
+        id,
+        body.reason || 'Administrative policy cancellation'
+      );
+      return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
+
+  // GET /api/v1/admin/matching/stats - Matching engine analytics & conversion rates
+  app.get(
+    '/matching/stats',
+    {
+      preHandler: [authenticate, requireRole('moderator', 'admin')],
+    },
+    async (_request, reply) => {
+      const result = await adminService.getMatchingAnalytics();
+      return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
+
+  // GET /api/v1/admin/groups - Commute circles directory
+  app.get(
+    '/groups',
+    {
+      preHandler: [authenticate, requireRole('moderator', 'admin')],
+    },
+    async (request, reply) => {
+      const query = request.query as { page?: string; pageSize?: string; search?: string };
+      const page = query.page ? parseInt(query.page, 10) : 1;
+      const pageSize = query.pageSize ? parseInt(query.pageSize, 10) : 20;
+
+      const result = await adminService.listAdminGroups(page, pageSize, query.search);
+      return reply.status(200).send(createPaginatedResponse(result.items, result.pagination));
+    }
+  );
 };

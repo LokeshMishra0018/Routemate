@@ -33,6 +33,13 @@ import { NotificationsPage } from '../pages/notifications/NotificationsPage';
 
 // Admin Portal Pages
 import { AdminDashboardPage } from '../pages/admin/AdminDashboardPage';
+import { AdminLiveUsersPage } from '../pages/admin/AdminLiveUsersPage';
+import { AdminTripsPage } from '../pages/admin/AdminTripsPage';
+import { AdminUserFunnelPage } from '../pages/admin/AdminUserFunnelPage';
+import { AdminDemandAnalyticsPage } from '../pages/admin/AdminDemandAnalyticsPage';
+import { AdminMatchingPage } from '../pages/admin/AdminMatchingPage';
+import { AdminGroupsPage } from '../pages/admin/AdminGroupsPage';
+import { AdminSystemHealthPage } from '../pages/admin/AdminSystemHealthPage';
 import { AdminVerificationsPage } from '../pages/admin/AdminVerificationsPage';
 import { AdminReportsPage } from '../pages/admin/AdminReportsPage';
 import { AdminSosPage } from '../pages/admin/AdminSosPage';
@@ -91,7 +98,7 @@ export const router = createBrowserRouter([
     ],
   },
 
-  // Admin & Moderation Portal (Protected by Role Guard)
+  // Admin & Command Center Portal (Protected by Role Guard)
   {
     path: '/admin',
     element: (
@@ -101,6 +108,13 @@ export const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: <AdminDashboardPage /> },
+      { path: 'live', element: <AdminLiveUsersPage /> },
+      { path: 'trips', element: <AdminTripsPage /> },
+      { path: 'users-funnel', element: <AdminUserFunnelPage /> },
+      { path: 'demand', element: <AdminDemandAnalyticsPage /> },
+      { path: 'matching', element: <AdminMatchingPage /> },
+      { path: 'groups', element: <AdminGroupsPage /> },
+      { path: 'system', element: <AdminSystemHealthPage /> },
       { path: 'verifications', element: <AdminVerificationsPage /> },
       { path: 'reports', element: <AdminReportsPage /> },
       { path: 'sos', element: <AdminSosPage /> },

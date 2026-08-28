@@ -102,6 +102,43 @@ export const DashboardPage: React.FC = () => {
         <div className="absolute -right-16 -top-16 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
       </div>
 
+      {/* Admin Fast-Switch Banner */}
+      {(user?.role === 'admin' || user?.role === 'moderator') && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-950/60 via-slate-900 to-indigo-950/60 border border-amber-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-glow">
+          <div className="flex items-center gap-3.5">
+            <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+              <Shield className="w-5 h-5 text-amber-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs font-black uppercase tracking-wider text-amber-300">
+                  Campus Administrator Command Center
+                </h4>
+                <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                  Live Telemetry
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Inspect real-time student presence, 24h demand analytics, trip dispatches, and emergency triage.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Link to="/admin/live">
+              <Button size="sm" variant="outline" className="text-xs border-emerald-500/40 text-emerald-300 hover:bg-emerald-950/40">
+                🟢 Live Radar
+              </Button>
+            </Link>
+            <Link to="/admin">
+              <Button size="sm" variant="primary" className="text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold">
+                Open Command Center →
+              </Button>
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Verification Action Banner if unverified */}
       {isUnverified && (
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-2xl bg-amber-950/30 border border-amber-500/40 text-amber-200 shadow-glow">

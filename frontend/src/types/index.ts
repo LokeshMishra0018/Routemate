@@ -348,3 +348,198 @@ export interface ApiError {
   message: string;
   details?: unknown;
 }
+
+// ==========================================
+// ADMIN COMMAND CENTER & TELEMETRY TYPES
+// ==========================================
+
+export interface LivePresenceUser {
+  socketId: string;
+  userId: string;
+  name: string;
+  email: string;
+  avatarUrl: string | null;
+  college: string;
+  role: string;
+  currentPath: string;
+  currentAction: string;
+  deviceCategory: 'mobile' | 'desktop' | 'tablet' | 'unknown';
+  browserInfo: string;
+  connectedAt: string;
+  lastPingAt: string;
+  isIdle: boolean;
+  sessionDurationSeconds: number;
+}
+
+export interface LivePresenceResponse {
+  totalOnline: number;
+  activeNow: number;
+  idleCount: number;
+  users: LivePresenceUser[];
+  pageDistribution: Record<string, number>;
+  deviceDistribution: Record<string, number>;
+  timestamp: string;
+}
+
+export interface LiveTelemetryEvent {
+  id: string;
+  userId: string;
+  userName: string;
+  eventType: string;
+  description: string;
+  metadata?: Record<string, unknown>;
+  timestamp: string;
+}
+
+export interface AdminOverviewStats {
+  users: {
+    total: number;
+    verified: number;
+    verificationRate: number;
+    liveOnline: number;
+    activeToday: number;
+    newToday: number;
+  };
+  trips: {
+    total: number;
+    planned: number;
+    inProgress: number;
+    completed: number;
+    cancelled: number;
+    seatFillRate: number;
+  };
+  impact: {
+    costSavedInr: number;
+    carbonSavedKg: number;
+  };
+  queues: {
+    pendingVerifications: number;
+    openReports: number;
+    activeSos: number;
+  };
+  topCorridors: Array<{
+    source: string;
+    destination: string;
+    tripCount: number;
+    avgFare: number;
+  }>;
+  hourlyDemand: Array<{
+    hour: string;
+    hourNum: number;
+    tripsCount: number;
+  }>;
+  recentEvents: LiveTelemetryEvent[];
+}
+
+export interface AdminFunnelStage {
+  name: string;
+  count: number;
+  conversionRate: number;
+  dropoffRate: number;
+}
+
+export interface AdminFunnelResponse {
+  period: string;
+  stages: AdminFunnelStage[];
+  retentionCohorts: Array<{
+    week: string;
+    registered: number;
+    activeW1: number;
+    activeW2: number;
+    activeW3: number;
+    activeW4: number;
+    retentionRate: string;
+  }>;
+}
+
+export interface AdminDemandRoute {
+  id: string;
+  from: string;
+  to: string;
+  searchVolume: number;
+  tripsAvailable: number;
+  unmetRatioPercent: number;
+  avgFare: number;
+  peakTime: string;
+}
+
+export interface AdminDemandResponse {
+  totalActivePlannedTrips: number;
+  demandRoutes: AdminDemandRoute[];
+  unservedAlerts: Array<{
+    from: string;
+    to: string;
+    unmetSearches: number;
+    suggestedAction: string;
+  }>;
+}
+
+export interface AdminSystemHealth {
+  status: 'healthy' | 'degraded' | 'down';
+  activeSockets: number;
+  uptimeSeconds: number;
+  memoryUsageMb: {
+    rss: number;
+    heapTotal: number;
+    heapUsed: number;
+    external: number;
+  };
+  requests: {
+    total: number;
+    rpm: number;
+    status2xx: number;
+    status4xx: number;
+    status5xx: number;
+    errorRatePercent: number;
+  };
+  latencyMs: {
+    avg: number;
+    p50: number;
+    p95: number;
+    p99: number;
+  };
+}
+
+export interface AdminTripItem {
+  id: string;
+  userId: string;
+  hostName: string;
+  hostEmail: string;
+  source: string;
+  destination: string;
+  travelDate: string;
+  departureTime: string;
+  vehicleType: string;
+  totalSeats: number;
+  availableSeats: number;
+  fareAmount: number;
+  status: string;
+  passengersCount: number;
+  createdAt: string;
+}
+
+export interface AdminMatchingStats {
+  totalMatchesGenerated: number;
+  acceptedRequests: number;
+  pendingRequests: number;
+  rejectedRequests: number;
+  acceptanceRatePercent: number;
+  avgMatchTimeSeconds: number;
+  algorithmDistribution: {
+    geospatialScoreAvg: number;
+    timeScoreAvg: number;
+    routeVectorScoreAvg: number;
+    trustScoreAvg: number;
+  };
+}
+
+export interface AdminGroupItem {
+  id: string;
+  name: string;
+  description: string;
+  creatorId: string;
+  memberCount: number;
+  isOfficial: boolean;
+  createdAt: string;
+}
+

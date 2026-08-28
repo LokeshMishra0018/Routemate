@@ -10,7 +10,8 @@ export interface AdminActionDocument {
     | 'user_unsuspended'
     | 'role_changed'
     | 'report_resolved'
-    | 'sos_resolved';
+    | 'sos_resolved'
+    | 'trip_cancelled_by_admin';
   targetUserId: string | null;
   targetResourceId: string | null;
   metadata?: Record<string, unknown>;

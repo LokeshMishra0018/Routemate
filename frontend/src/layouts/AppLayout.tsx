@@ -1,8 +1,11 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
 import { Navbar } from '../components/layout/Navbar';
+import { usePresenceTracker } from '../lib/usePresenceTracker';
 
 export const AppLayout: React.FC = () => {
+  usePresenceTracker();
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 selection:bg-indigo-500 selection:text-white">
       <Navbar />

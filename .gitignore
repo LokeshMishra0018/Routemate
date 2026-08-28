@@ -52,3 +52,4 @@ backend/scripts/
 scripts/
 *.scratch.js
 *.scratch.mjs
+backend/uploads/

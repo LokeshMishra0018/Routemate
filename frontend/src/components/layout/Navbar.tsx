@@ -80,6 +80,20 @@ export const Navbar: React.FC = () => {
               </Link>
             );
           })}
+
+          {isModeratorOrAdmin && (
+            <Link
+              to="/admin"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
+                location.pathname.startsWith('/admin')
+                  ? 'bg-amber-500/30 text-amber-300 border border-amber-500/50 shadow-sm'
+                  : 'bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 hover:text-amber-300'
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5 text-amber-400" />
+              <span>Admin Portal</span>
+            </Link>
+          )}
         </nav>
 
         {/* Right Actions */}

@@ -160,6 +160,30 @@ export const REQUIRED_INDEXES: IndexDefinition[] = [
     indexSpec: { status: 1, triggeredAt: -1 },
     options: { name: 'idx_sos_events_status_triggeredAt' },
   },
+
+  // Activity Logs Collection (Telemetry)
+  {
+    collection: COLLECTIONS.ACTIVITY_LOGS,
+    indexSpec: { createdAt: -1 },
+    options: { name: 'idx_activity_logs_createdAt' },
+  },
+  {
+    collection: COLLECTIONS.ACTIVITY_LOGS,
+    indexSpec: { userId: 1, eventType: 1 },
+    options: { name: 'idx_activity_logs_userId_eventType' },
+  },
+
+  // Search Logs Collection (Demand Analytics)
+  {
+    collection: COLLECTIONS.SEARCH_LOGS,
+    indexSpec: { createdAt: -1 },
+    options: { name: 'idx_search_logs_createdAt' },
+  },
+  {
+    collection: COLLECTIONS.SEARCH_LOGS,
+    indexSpec: { 'source.normalizedName': 1, 'destination.normalizedName': 1 },
+    options: { name: 'idx_search_logs_corridor' },
+  },
 ];
 
 /**
