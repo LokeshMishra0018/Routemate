@@ -27,12 +27,17 @@ export class UsersService {
       }
     }
 
+    const verificationStatus = profile?.verificationStatus || 'unverified';
+    const emailVerified = user.emailVerifiedAt !== null;
+    const { computeVerificationTier } = await import('./users.types.js');
+    const verificationTier = computeVerificationTier(emailVerified, verificationStatus);
+
     return {
       id: user._id.toHexString(),
       email: user.email,
       role: user.role,
       status: user.status,
-      emailVerified: user.emailVerifiedAt !== null,
+      emailVerified,
       profile: {
         fullName: profile?.fullName || '',
         collegeId: profile?.collegeId || '',
@@ -42,7 +47,8 @@ export class UsersService {
         gender: profile?.gender || null,
         bio: profile?.bio || null,
         avatarUrl: profile?.avatarUrl || null,
-        verificationStatus: profile?.verificationStatus || 'unverified',
+        verificationStatus,
+        verificationTier,
         trustScore: profile?.trustScore || 50,
         averageRating: profile?.averageRating || 5.0,
         completedTripCount: profile?.completedTripCount || 0,
@@ -109,6 +115,9 @@ export class UsersService {
       }
     }
 
+    const { computeVerificationTier } = await import('./users.types.js');
+    const verificationTier = computeVerificationTier(user.emailVerifiedAt !== null, profile.verificationStatus);
+
     return {
       id: user._id.toHexString(),
       fullName: profile.fullName,
@@ -119,6 +128,7 @@ export class UsersService {
       bio: profile.bio,
       avatarUrl: profile.avatarUrl,
       verificationStatus: profile.verificationStatus,
+      verificationTier,
       trustScore: profile.trustScore,
       averageRating: profile.averageRating,
       completedTripCount: profile.completedTripCount,

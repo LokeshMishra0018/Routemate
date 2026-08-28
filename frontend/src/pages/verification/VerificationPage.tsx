@@ -15,6 +15,7 @@ import { useToast } from '../../context/ToastContext';
 import { Button } from '../../components/ui/Button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../components/ui/Card';
 import { LoadingSpinner } from '../../components/ui/EmptyState';
+import { TrustBadge } from '../../components/common/TrustBadge';
 
 export const VerificationPage: React.FC = () => {
   const { profile, refreshProfile } = useAuth();
@@ -181,6 +182,44 @@ export const VerificationPage: React.FC = () => {
         </Card>
       )}
 
+      {/* 3-Tier Trust Status Breakdown */}
+      <Card className="glass-card border-slate-800 p-6 space-y-4">
+        <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-indigo-400" /> Student Verification Tiers
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Tier 1: Red */}
+          <div className="p-3.5 rounded-xl bg-rose-950/20 border border-rose-500/20 space-y-2">
+            <div className="flex items-center gap-2">
+              <TrustBadge tier="unverified" size="sm" />
+            </div>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Account created, but college email OTP has not yet been verified. Restricted from booking carpools.
+            </p>
+          </div>
+
+          {/* Tier 2: Yellow */}
+          <div className="p-3.5 rounded-xl bg-amber-950/20 border border-amber-500/20 space-y-2">
+            <div className="flex items-center gap-2">
+              <TrustBadge tier="partially_verified" size="sm" />
+            </div>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Email verified via OTP or Google. Can search rides, join carpools, and chat with classmates.
+            </p>
+          </div>
+
+          {/* Tier 3: Blue */}
+          <div className="p-3.5 rounded-xl bg-[#1d9bf0]/10 border border-[#1d9bf0]/30 space-y-2">
+            <div className="flex items-center gap-2">
+              <TrustBadge tier="fully_verified" size="sm" />
+            </div>
+            <p className="text-[11px] text-slate-300 leading-relaxed">
+              Physical College ID card approved by Admin. Unlocks the official <strong>Twitter-style Blue Tick</strong> badge everywhere!
+            </p>
+          </div>
+        </div>
+      </Card>
+
       {/* Verification Benefits Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1.5 text-center">
@@ -190,15 +229,15 @@ export const VerificationPage: React.FC = () => {
         </div>
 
         <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1.5 text-center">
-          <ShieldCheck className="w-6 h-6 text-indigo-400 mx-auto" />
-          <h4 className="text-xs font-bold text-slate-200">Verified Shield</h4>
-          <p className="text-[11px] text-slate-400">Appears next to your name on trip cards, chats, and matches.</p>
+          <ShieldCheck className="w-6 h-6 text-[#1d9bf0] mx-auto" />
+          <h4 className="text-xs font-bold text-slate-200">Twitter Blue Tick</h4>
+          <p className="text-[11px] text-slate-400">Official verified badge displayed next to your name everywhere.</p>
         </div>
 
         <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1.5 text-center">
           <CheckCircle2 className="w-6 h-6 text-amber-400 mx-auto" />
-          <h4 className="text-xs font-bold text-slate-200">Group Host Rights</h4>
-          <p className="text-[11px] text-slate-400">Host shared rides and access dynamic cost-sharing tools.</p>
+          <h4 className="text-xs font-bold text-slate-200">Campus Trust</h4>
+          <p className="text-[11px] text-slate-400">Verified status gives fellow student commuters confidence to ride together.</p>
         </div>
       </div>
     </div>

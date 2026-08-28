@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Avatar } from '../ui/Badge';
+import { TrustBadge } from '../common/TrustBadge';
 import { Button } from '../ui/Button';
 import { TrustScoreMeter } from '../ui/TrustScoreMeter';
 
@@ -116,8 +117,13 @@ export const Navbar: React.FC = () => {
                 size="sm"
                 verified={profile?.verificationStatus === 'approved'}
               />
-              <span className="hidden md:inline-block text-xs font-semibold text-slate-200 max-w-[100px] truncate">
-                {profile?.fullName || user?.email?.split('@')[0]}
+              <span className="hidden md:inline-flex items-center gap-1 text-xs font-semibold text-slate-200 max-w-[120px] truncate">
+                <span className="truncate">{profile?.fullName || user?.email?.split('@')[0]}</span>
+                <TrustBadge
+                  tier={profile?.verificationTier || (profile?.verificationStatus === 'approved' ? 'fully_verified' : 'partially_verified')}
+                  iconOnly
+                  size="xs"
+                />
               </span>
               <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
             </button>
@@ -126,8 +132,14 @@ export const Navbar: React.FC = () => {
             {isUserMenuOpen && (
               <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-slate-900 border border-slate-700 p-2 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150">
                 <div className="p-3 border-b border-slate-800">
-                  <p className="text-xs font-bold text-slate-100 truncate">{profile?.fullName || 'Student'}</p>
-                  <p className="text-[11px] text-slate-400 truncate">{user?.email}</p>
+                  <div className="flex items-center justify-between gap-1">
+                    <p className="text-xs font-bold text-slate-100 truncate">{profile?.fullName || 'Student'}</p>
+                    <TrustBadge
+                      tier={profile?.verificationTier || (profile?.verificationStatus === 'approved' ? 'fully_verified' : 'partially_verified')}
+                      size="xs"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400 truncate mt-0.5">{user?.email}</p>
                   <div className="mt-2.5">
                     <TrustScoreMeter score={profile?.trustScore || 0} size="sm" />
                   </div>

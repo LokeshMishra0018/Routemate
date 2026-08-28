@@ -24,6 +24,7 @@ import { apiClient } from '../../services/api.client';
 import { Trip, Connection } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { Badge, Avatar } from '../../components/ui/Badge';
+import { TrustBadge } from '../../components/common/TrustBadge';
 import { Card } from '../../components/ui/Card';
 import { Select } from '../../components/ui/Select';
 import { Input } from '../../components/ui/Input';
@@ -424,11 +425,13 @@ export const TripsListPage: React.FC = () => {
                         verified={isMyTrip ? user?.verificationStatus === 'approved' : traveler?.verificationStatus === 'approved'}
                       />
                       <div className="min-w-0">
-                        <span className="text-xs font-bold text-slate-100 flex items-center gap-1.5 truncate">
-                          {isMyTrip ? `${user?.fullName || 'Your Schedule'} (You)` : traveler?.fullName || 'Campus Traveler'}
-                          {((isMyTrip ? user?.verificationStatus : traveler?.verificationStatus) === 'approved') && (
-                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                          )}
+                        <span className="text-xs font-bold text-slate-100 flex items-center gap-1 truncate">
+                          <span>{isMyTrip ? `${user?.fullName || 'Your Schedule'} (You)` : traveler?.fullName || 'Campus Traveler'}</span>
+                          <TrustBadge
+                            tier={isMyTrip ? (profile?.verificationTier || (user?.verificationStatus === 'approved' ? 'fully_verified' : 'partially_verified')) : (traveler?.verificationTier || (traveler?.verificationStatus === 'approved' ? 'fully_verified' : 'partially_verified'))}
+                            iconOnly
+                            size="xs"
+                          />
                         </span>
                         <span className="text-[11px] text-slate-400 block truncate">
                           {isMyTrip ? user?.collegeName || 'KIET' : traveler?.collegeName || 'KIET'}

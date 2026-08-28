@@ -84,11 +84,11 @@ export const Avatar: React.FC<AvatarProps> = ({
       </div>
       {verified && (
         <span
-          title="Verified Student"
-          className="absolute -bottom-0.5 -right-0.5 bg-emerald-500 text-white p-0.5 rounded-full border-2 border-slate-950 flex items-center justify-center"
+          title="Official ID Verified Student"
+          className="absolute -bottom-1 -right-1 flex items-center justify-center filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]"
         >
-          <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          <svg viewBox="0 0 24 24" className="w-4 h-4 text-[#1d9bf0] fill-current">
+            <path d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.67-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.34 2.19c-1.39-.46-2.9-.2-3.91.81s-1.27 2.52-.81 3.91c-1.31.67-2.19 1.91-2.19 3.34s.88 2.67 2.19 3.34c-.46 1.39-.2 2.9.81 3.91s2.52 1.27 3.91.81c.67 1.31 1.91 2.19 3.34 2.19s2.67-.88 3.34-2.19c1.39.46 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34zm-11.71 4.2L6.8 12.46l1.41-1.42 2.33 2.33 4.85-4.86 1.41 1.42-6.26 6.27z" />
           </svg>
         </span>
       )}

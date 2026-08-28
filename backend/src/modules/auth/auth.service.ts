@@ -5,7 +5,7 @@ import { generateAccessToken, generateRefreshToken } from '../../lib/jwt.js';
 import { getEmailProvider } from '../../lib/email/email.interface.js';
 import { getEnv } from '../../config/env.js';
 import { ConflictError, UnauthorizedError, ValidationError, ForbiddenError } from '../../utils/errors.js';
-import { UserProfileDto } from '../users/users.types.js';
+import { UserProfileDto, computeVerificationTier } from '../users/users.types.js';
 
 export class AuthService {
   /**
@@ -302,6 +302,7 @@ export class AuthService {
         bio: profile?.bio || null,
         avatarUrl: profile?.avatarUrl || null,
         verificationStatus: profile?.verificationStatus || 'unverified',
+        verificationTier: computeVerificationTier(user.emailVerifiedAt !== null, profile?.verificationStatus),
         trustScore: profile?.trustScore || 50,
         averageRating: profile?.averageRating || 5.0,
         completedTripCount: profile?.completedTripCount || 0,
@@ -644,6 +645,7 @@ export class AuthService {
         bio: profile?.bio || null,
         avatarUrl: profile?.avatarUrl || googlePayload.picture || null,
         verificationStatus: profile?.verificationStatus || 'unverified',
+        verificationTier: computeVerificationTier(true, profile?.verificationStatus),
         trustScore: profile?.trustScore || 50,
         averageRating: profile?.averageRating || 5.0,
         completedTripCount: profile?.completedTripCount || 0,

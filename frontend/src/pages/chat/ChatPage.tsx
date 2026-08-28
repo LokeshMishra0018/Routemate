@@ -29,6 +29,7 @@ import { useSocket } from '../../context/SocketContext';
 import { Conversation, Message, PublicProfile } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { Avatar } from '../../components/ui/Badge';
+import { TrustBadge } from '../../components/common/TrustBadge';
 import { TrustScoreMeter } from '../../components/ui/TrustScoreMeter';
 import { LoadingSpinner } from '../../components/ui/EmptyState';
 import { cn } from '../../lib/utils';
@@ -403,10 +404,12 @@ export const ChatPage: React.FC = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <h4 className="text-sm font-semibold text-[#111b21] truncate flex items-center gap-1">
-                        {partnerProfile?.fullName || 'Travel Partner'}
-                        {partnerProfile?.verificationStatus === 'approved' && (
-                          <ShieldCheck className="w-3.5 h-3.5 text-[#008069] shrink-0" />
-                        )}
+                        <span>{partnerProfile?.fullName || 'Travel Partner'}</span>
+                        <TrustBadge
+                          tier={partnerProfile?.verificationTier || (partnerProfile?.verificationStatus === 'approved' ? 'fully_verified' : 'partially_verified')}
+                          iconOnly
+                          size="xs"
+                        />
                       </h4>
                       {lastMsgTime && (
                         <span className="text-[11px] text-[#667781] shrink-0">
@@ -450,14 +453,18 @@ export const ChatPage: React.FC = () => {
 
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5 truncate">
-                    <h3 className="text-sm font-bold text-[#111b21] truncate">
-                      {otherProfile?.fullName || 'Student Travel Companion'}
+                    <h3 className="text-sm font-bold text-[#111b21] truncate flex items-center gap-1">
+                      <span>{otherProfile?.fullName || 'Student Travel Companion'}</span>
+                      <TrustBadge
+                        tier={otherProfile?.verificationTier || (otherProfile?.verificationStatus === 'approved' ? 'fully_verified' : 'partially_verified')}
+                        iconOnly
+                        size="xs"
+                      />
                     </h3>
-                    {otherProfile?.verificationStatus === 'approved' && (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-[#008069] bg-[#d9fdd3] px-1.5 py-0.2 rounded-full">
-                        <ShieldCheck className="w-3 h-3 text-[#008069]" /> Verified
-                      </span>
-                    )}
+                    <TrustBadge
+                      tier={otherProfile?.verificationTier || (otherProfile?.verificationStatus === 'approved' ? 'fully_verified' : 'partially_verified')}
+                      size="xs"
+                    />
                   </div>
 
                   <p className="text-xs text-[#667781] truncate">

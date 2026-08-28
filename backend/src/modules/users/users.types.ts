@@ -3,6 +3,21 @@ import { ObjectId } from 'mongodb';
 export type UserRole = 'student' | 'moderator' | 'admin';
 export type UserStatus = 'active' | 'suspended' | 'deactivated';
 export type VerificationStatus = 'unverified' | 'pending' | 'approved' | 'rejected';
+export type VerificationTier = 'unverified' | 'partially_verified' | 'fully_verified';
+
+export function computeVerificationTier(
+  emailVerified: boolean | Date | null | undefined,
+  verificationStatus: VerificationStatus | string | null | undefined
+): VerificationTier {
+  const isEmailVerified = Boolean(emailVerified);
+  if (!isEmailVerified) {
+    return 'unverified';
+  }
+  if (verificationStatus === 'approved') {
+    return 'fully_verified';
+  }
+  return 'partially_verified';
+}
 
 export interface UserDocument {
   _id: ObjectId;
@@ -67,6 +82,7 @@ export interface UserProfileDto {
     bio: string | null;
     avatarUrl: string | null;
     verificationStatus: VerificationStatus;
+    verificationTier: VerificationTier;
     trustScore: number;
     averageRating: number;
     completedTripCount: number;
@@ -85,6 +101,7 @@ export interface PublicProfileDto {
   bio: string | null;
   avatarUrl: string | null;
   verificationStatus: VerificationStatus;
+  verificationTier: VerificationTier;
   trustScore: number;
   averageRating: number;
   completedTripCount: number;
