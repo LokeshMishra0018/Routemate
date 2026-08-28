@@ -31,10 +31,11 @@ export class NodemailerEmailProvider implements EmailProvider {
   async sendVerificationEmail(to: string, otp: string, name?: string): Promise<void> {
     const env = getEnv();
     const studentName = name || 'Student';
+    const fromAddress = env.SMTP_USER ? `RouteMate <${env.SMTP_USER}>` : env.EMAIL_FROM;
 
     // Record in memory for tests/diagnostics
     lastSentEmails.push({ to, type: 'VERIFICATION', token: otp, timestamp: new Date() });
-    console.log(`[EMAIL][VERIFY] From: ${env.EMAIL_FROM} | To: ${to} (${studentName}) | 6-Digit OTP: ${otp}`);
+    console.log(`[EMAIL][VERIFY] From: ${fromAddress} | To: ${to} (${studentName}) | 6-Digit OTP: ${otp}`);
 
     const transporter = this.getTransporter();
     if (!transporter) {
@@ -82,7 +83,7 @@ export class NodemailerEmailProvider implements EmailProvider {
 
     try {
       const info = await transporter.sendMail({
-        from: env.EMAIL_FROM,
+        from: fromAddress,
         to,
         subject: `RouteMate Verification Code: ${otp}`,
         text: `Hello ${studentName},\n\nYour RouteMate 6-digit verification code is: ${otp}\n\nThis code expires in 10 minutes.\n\nRouteMate Team`,
@@ -97,9 +98,10 @@ export class NodemailerEmailProvider implements EmailProvider {
   async sendPasswordResetEmail(to: string, otp: string, name?: string): Promise<void> {
     const env = getEnv();
     const studentName = name || 'Student';
+    const fromAddress = env.SMTP_USER ? `RouteMate <${env.SMTP_USER}>` : env.EMAIL_FROM;
 
     lastSentEmails.push({ to, type: 'PASSWORD_RESET', token: otp, timestamp: new Date() });
-    console.log(`[EMAIL][RESET_PASSWORD] From: ${env.EMAIL_FROM} | To: ${to} (${studentName}) | 6-Digit OTP: ${otp}`);
+    console.log(`[EMAIL][RESET_PASSWORD] From: ${fromAddress} | To: ${to} (${studentName}) | 6-Digit OTP: ${otp}`);
 
     const transporter = this.getTransporter();
     if (!transporter) {
@@ -146,7 +148,7 @@ export class NodemailerEmailProvider implements EmailProvider {
 
     try {
       const info = await transporter.sendMail({
-        from: env.EMAIL_FROM,
+        from: fromAddress,
         to,
         subject: `RouteMate Password Reset Code: ${otp}`,
         text: `Hello ${studentName},\n\nYour RouteMate 6-digit password reset code is: ${otp}\n\nThis code expires in 10 minutes.\n\nRouteMate Team`,
@@ -160,8 +162,9 @@ export class NodemailerEmailProvider implements EmailProvider {
 
   async sendVerificationStatusEmail(to: string, status: 'approved' | 'rejected', reason?: string): Promise<void> {
     const env = getEnv();
+    const fromAddress = env.SMTP_USER ? `RouteMate <${env.SMTP_USER}>` : env.EMAIL_FROM;
     lastSentEmails.push({ to, type: `VERIFICATION_${status.toUpperCase()}`, timestamp: new Date() });
-    console.log(`[EMAIL][STATUS] From: ${env.EMAIL_FROM} | To: ${to} | Status: ${status} | Reason: ${reason || 'N/A'}`);
+    console.log(`[EMAIL][STATUS] From: ${fromAddress} | To: ${to} | Status: ${status} | Reason: ${reason || 'N/A'}`);
 
     const transporter = this.getTransporter();
     if (!transporter) {
@@ -170,7 +173,7 @@ export class NodemailerEmailProvider implements EmailProvider {
 
     try {
       await transporter.sendMail({
-        from: env.EMAIL_FROM,
+        from: fromAddress,
         to,
         subject: `RouteMate ID Verification ${status === 'approved' ? 'Approved ✅' : 'Rejected ❌'}`,
         text: `Your college ID verification has been ${status}.${reason ? ` Reason: ${reason}` : ''}`,

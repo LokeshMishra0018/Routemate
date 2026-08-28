@@ -67,8 +67,39 @@ describe('Authentication & Sessions Flow (Integration)', () => {
     expect(emailRecord?.token).toBeDefined();
   });
 
-  it('should reject duplicate email registration with 409 Conflict', async () => {
-    const response = await app.inject({
+  it('should refresh OTP and credentials when unverified student re-registers, and reject verified account with 409 Conflict', async () => {
+    // 1. Re-register while still unverified -> succeeds and sends fresh OTP
+    const resendRegister = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      payload: {
+        email: 'rahul.sharma@kiet.edu',
+        password: 'SecurePassword123!',
+        fullName: 'Rahul Sharma Updated',
+      },
+    });
+
+    expect(resendRegister.statusCode).toBe(201);
+    const resendBody = JSON.parse(resendRegister.body);
+    expect(resendBody.success).toBe(true);
+
+    // 2. Verify email address with the latest OTP
+    const latestEmailRecord = DevEmailProvider.lastSentEmails
+      .filter((e) => e.to === 'rahul.sharma@kiet.edu' && e.type === 'VERIFICATION')
+      .pop();
+    const otp = latestEmailRecord!.token!;
+    expect(otp).toMatch(/^\d{6}$/);
+
+    const verifyResponse = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/verify-email',
+      payload: { email: 'rahul.sharma@kiet.edu', otp },
+    });
+
+    expect(verifyResponse.statusCode).toBe(200);
+
+    // 3. Now that account is verified, duplicate registration should be rejected with 409 Conflict
+    const dupResponse = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
       payload: {
@@ -78,29 +109,10 @@ describe('Authentication & Sessions Flow (Integration)', () => {
       },
     });
 
-    expect(response.statusCode).toBe(409);
-    const body = JSON.parse(response.body);
-    expect(body.success).toBe(false);
-    expect(body.error.code).toBe('CONFLICT');
-  });
-
-  it('should verify email address with valid 6-digit OTP and email', async () => {
-    const emailRecord = DevEmailProvider.lastSentEmails.find(
-      (e) => e.to === 'rahul.sharma@kiet.edu' && e.type === 'VERIFICATION'
-    );
-    const otp = emailRecord!.token!;
-    expect(otp).toMatch(/^\d{6}$/);
-
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/v1/auth/verify-email',
-      payload: { email: 'rahul.sharma@kiet.edu', otp },
-    });
-
-    expect(response.statusCode).toBe(200);
-    const body = JSON.parse(response.body);
-    expect(body.success).toBe(true);
-    expect(body.data.message).toContain('verified successfully');
+    expect(dupResponse.statusCode).toBe(409);
+    const dupBody = JSON.parse(dupResponse.body);
+    expect(dupBody.success).toBe(false);
+    expect(dupBody.error.code).toBe('CONFLICT');
   });
 
   it('should support resending a fresh 6-digit OTP', async () => {

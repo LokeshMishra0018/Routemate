@@ -21,7 +21,47 @@ export class AuthService {
     // 2. Check if user already exists
     const existing = await usersRepository.findUserByEmailNormalized(emailNormalized);
     if (existing) {
-      throw new ConflictError('An account with this email address already exists');
+      // If user is already verified, block duplicate registration with 409 Conflict
+      if (existing.emailVerifiedAt) {
+        throw new ConflictError('An account with this email address already exists. Please log in.');
+      }
+
+      // If user was created but NOT yet verified, update credentials, regenerate a fresh 6-digit OTP, and resend
+      const passwordHash = await hashPassword(input.password);
+      const rawOtp = generateNumericOtp(6);
+      const verificationTokenHash = hashToken(rawOtp);
+      const verificationExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+      const now = new Date();
+
+      await usersRepository.updateUser(existing._id.toHexString(), {
+        passwordHash,
+        emailVerificationTokenHash: verificationTokenHash,
+        emailVerificationExpiresAt: verificationExpiresAt,
+        updatedAt: now,
+      });
+
+      const profile = await usersRepository.findProfileByUserId(existing._id.toHexString());
+      if (profile) {
+        await usersRepository.updateProfile(existing._id.toHexString(), {
+          fullName: input.fullName.trim(),
+          updatedAt: now,
+        });
+      }
+
+      const emailProvider = getEmailProvider();
+      await emailProvider.sendVerificationEmail(input.email, rawOtp, input.fullName.trim());
+
+      return {
+        userId: existing._id.toHexString(),
+        email: existing.email,
+        college: { id: college.id, name: college.name, domain: college.domain },
+        profile: {
+          fullName: input.fullName.trim(),
+          verificationStatus: 'unverified',
+          trustScore: 50,
+        },
+        message: 'A fresh 6-digit verification OTP has been sent to your institutional email.',
+      };
     }
 
     // 3. Hash password using Argon2id
