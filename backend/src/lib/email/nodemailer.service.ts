@@ -5,7 +5,11 @@ import { getEnv } from '../../config/env.js';
 export class NodemailerEmailProvider implements EmailProvider {
   private transporter: nodemailer.Transporter | null = null;
 
-  constructor() {
+  private getTransporter(): nodemailer.Transporter | null {
+    if (this.transporter) {
+      return this.transporter;
+    }
+
     const env = getEnv();
     if (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS) {
       this.transporter = nodemailer.createTransport({
@@ -18,6 +22,7 @@ export class NodemailerEmailProvider implements EmailProvider {
         },
       });
     }
+    return this.transporter;
   }
 
   async sendVerificationEmail(to: string, otp: string, name?: string): Promise<void> {
@@ -28,7 +33,9 @@ export class NodemailerEmailProvider implements EmailProvider {
     lastSentEmails.push({ to, type: 'VERIFICATION', token: otp, timestamp: new Date() });
     console.log(`[EMAIL][VERIFY] From: ${env.EMAIL_FROM} | To: ${to} (${studentName}) | 6-Digit OTP: ${otp}`);
 
-    if (!this.transporter) {
+    const transporter = this.getTransporter();
+    if (!transporter) {
+      console.warn('[EMAIL][WARN] No SMTP transporter configured. Email was not dispatched over network.');
       return;
     }
 
@@ -43,18 +50,21 @@ export class NodemailerEmailProvider implements EmailProvider {
           .logo { text-align: center; margin-bottom: 24px; font-size: 24px; font-weight: 800; color: #6366f1; letter-spacing: -0.5px; }
           .title { font-size: 20px; font-weight: 700; color: #ffffff; text-align: center; margin-bottom: 12px; }
           .desc { font-size: 14px; color: #94a3b8; text-align: center; line-height: 1.6; margin-bottom: 28px; }
-          .otp-box { background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(16, 185, 129, 0.15) 100%); border: 1px solid #4f46e5; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 24px; }
-          .otp-code { font-size: 36px; font-weight: 900; letter-spacing: 8px; color: #a5b4fc; font-family: monospace; }
-          .expiry { font-size: 12px; color: #64748b; text-align: center; margin-bottom: 24px; }
-          .footer { font-size: 11px; color: #475569; text-align: center; border-top: 1px solid #1e293b; padding-top: 16px; }
+          .otp-container { background-color: #1e293b; border: 2px dashed #6366f1; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 28px; }
+          .otp-code { font-size: 36px; font-weight: 900; letter-spacing: 8px; color: #818cf8; font-family: 'Courier New', Courier, monospace; }
+          .expiry { font-size: 12px; color: #f59e0b; text-align: center; margin-bottom: 24px; }
+          .footer { font-size: 12px; color: #64748b; text-align: center; border-top: 1px solid #1e293b; padding-top: 20px; }
         </style>
       </head>
       <body>
         <div class="card">
-          <div class="logo">🧭 RouteMate</div>
-          <div class="title">Verify Your College Email</div>
-          <div class="desc">Hello ${studentName}, welcome to RouteMate! Use the 6-digit verification code below to activate your student account.</div>
-          <div class="otp-box">
+          <div class="logo">🚗 RouteMate</div>
+          <div class="title">Verify Your Campus Email</div>
+          <div class="desc">
+            Hi <strong>${studentName}</strong>,<br>
+            Welcome to RouteMate! Use the 6-digit verification code below to activate your student carpooling account:
+          </div>
+          <div class="otp-container">
             <div class="otp-code">${otp}</div>
           </div>
           <div class="expiry">⏱️ This OTP expires in <strong>10 minutes</strong>. Do not share this code with anyone.</div>
@@ -68,13 +78,14 @@ export class NodemailerEmailProvider implements EmailProvider {
     `;
 
     try {
-      await this.transporter.sendMail({
+      const info = await transporter.sendMail({
         from: env.EMAIL_FROM,
         to,
         subject: `RouteMate Verification Code: ${otp}`,
         text: `Hello ${studentName},\n\nYour RouteMate 6-digit verification code is: ${otp}\n\nThis code expires in 10 minutes.\n\nRouteMate Team`,
         html: htmlContent,
       });
+      console.log(`[EMAIL][SUCCESS] Sent verification email to ${to}. MessageId: ${info.messageId}`);
     } catch (err) {
       console.error('[EMAIL][ERROR] Failed to send email via SMTP transporter:', err);
     }
@@ -87,7 +98,9 @@ export class NodemailerEmailProvider implements EmailProvider {
     lastSentEmails.push({ to, type: 'PASSWORD_RESET', token: otp, timestamp: new Date() });
     console.log(`[EMAIL][RESET_PASSWORD] From: ${env.EMAIL_FROM} | To: ${to} (${studentName}) | 6-Digit OTP: ${otp}`);
 
-    if (!this.transporter) {
+    const transporter = this.getTransporter();
+    if (!transporter) {
+      console.warn('[EMAIL][WARN] No SMTP transporter configured. Email was not dispatched over network.');
       return;
     }
 
@@ -102,21 +115,24 @@ export class NodemailerEmailProvider implements EmailProvider {
           .logo { text-align: center; margin-bottom: 24px; font-size: 24px; font-weight: 800; color: #6366f1; letter-spacing: -0.5px; }
           .title { font-size: 20px; font-weight: 700; color: #ffffff; text-align: center; margin-bottom: 12px; }
           .desc { font-size: 14px; color: #94a3b8; text-align: center; line-height: 1.6; margin-bottom: 28px; }
-          .otp-box { background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(99, 102, 241, 0.15) 100%); border: 1px solid #ef4444; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 24px; }
-          .otp-code { font-size: 36px; font-weight: 900; letter-spacing: 8px; color: #fca5a5; font-family: monospace; }
-          .expiry { font-size: 12px; color: #64748b; text-align: center; margin-bottom: 24px; }
-          .footer { font-size: 11px; color: #475569; text-align: center; border-top: 1px solid #1e293b; padding-top: 16px; }
+          .otp-container { background-color: #1e293b; border: 2px dashed #f43f5e; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 28px; }
+          .otp-code { font-size: 36px; font-weight: 900; letter-spacing: 8px; color: #fb7185; font-family: 'Courier New', Courier, monospace; }
+          .expiry { font-size: 12px; color: #f59e0b; text-align: center; margin-bottom: 24px; }
+          .footer { font-size: 12px; color: #64748b; text-align: center; border-top: 1px solid #1e293b; padding-top: 20px; }
         </style>
       </head>
       <body>
         <div class="card">
-          <div class="logo">🧭 RouteMate</div>
+          <div class="logo">🚗 RouteMate</div>
           <div class="title">Reset Your Password</div>
-          <div class="desc">Hello ${studentName}, we received a request to reset your password. Use the 6-digit code below to create a new password.</div>
-          <div class="otp-box">
+          <div class="desc">
+            Hi <strong>${studentName}</strong>,<br>
+            We received a request to reset your password. Use the 6-digit code below to set a new password:
+          </div>
+          <div class="otp-container">
             <div class="otp-code">${otp}</div>
           </div>
-          <div class="expiry">⏱️ This reset OTP expires in <strong>10 minutes</strong>. If you did not make this request, please contact security immediately.</div>
+          <div class="expiry">⏱️ This OTP expires in <strong>10 minutes</strong>. If you did not make this request, you can safely ignore this email.</div>
           <div class="footer">
             &copy; ${new Date().getFullYear()} RouteMate Campus Carpooling.
           </div>
@@ -126,13 +142,14 @@ export class NodemailerEmailProvider implements EmailProvider {
     `;
 
     try {
-      await this.transporter.sendMail({
+      const info = await transporter.sendMail({
         from: env.EMAIL_FROM,
         to,
         subject: `RouteMate Password Reset Code: ${otp}`,
         text: `Hello ${studentName},\n\nYour RouteMate 6-digit password reset code is: ${otp}\n\nThis code expires in 10 minutes.\n\nRouteMate Team`,
         html: htmlContent,
       });
+      console.log(`[EMAIL][SUCCESS] Sent password reset email to ${to}. MessageId: ${info.messageId}`);
     } catch (err) {
       console.error('[EMAIL][ERROR] Failed to send email via SMTP transporter:', err);
     }
@@ -143,19 +160,20 @@ export class NodemailerEmailProvider implements EmailProvider {
     lastSentEmails.push({ to, type: `VERIFICATION_${status.toUpperCase()}`, timestamp: new Date() });
     console.log(`[EMAIL][STATUS] From: ${env.EMAIL_FROM} | To: ${to} | Status: ${status} | Reason: ${reason || 'N/A'}`);
 
-    if (!this.transporter) {
+    const transporter = this.getTransporter();
+    if (!transporter) {
       return;
     }
 
     try {
-      await this.transporter.sendMail({
+      await transporter.sendMail({
         from: env.EMAIL_FROM,
         to,
-        subject: `RouteMate Student ID Verification: ${status.toUpperCase()}`,
+        subject: `RouteMate ID Verification ${status === 'approved' ? 'Approved ✅' : 'Rejected ❌'}`,
         text: `Your college ID verification has been ${status}.${reason ? ` Reason: ${reason}` : ''}`,
       });
     } catch (err) {
-      console.error('[EMAIL][ERROR] Failed to send status email:', err);
+      console.error('[EMAIL][ERROR] Failed to send verification status email:', err);
     }
   }
 }
