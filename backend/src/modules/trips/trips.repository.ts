@@ -77,6 +77,20 @@ export class TripsRepository {
       if (filters.endDate) (query.travelDate as Record<string, string>).$lte = filters.endDate;
     }
 
+    // General keyword query (across source, destination, stops, notes)
+    if (filters.q) {
+      const qRegex = { $regex: filters.q.toLowerCase().trim(), $options: 'i' };
+      query.$or = [
+        { 'source.name': qRegex },
+        { 'source.normalizedName': qRegex },
+        { 'destination.name': qRegex },
+        { 'destination.normalizedName': qRegex },
+        { 'stops.name': qRegex },
+        { 'stops.normalizedName': qRegex },
+        { notes: qRegex },
+      ];
+    }
+
     // Filter by Normalized Location Names
     if (filters.sourceName) {
       query['source.normalizedName'] = { $regex: filters.sourceName.toLowerCase().trim(), $options: 'i' };

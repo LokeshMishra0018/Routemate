@@ -16,10 +16,23 @@ import { BadRequestError, NotFoundError, ForbiddenError, ConflictError } from '.
 
 export class ConnectionsService {
   private async formatConnectionDto(conn: ConnectionDocument): Promise<ConnectionResponseDto> {
-    const [requester, recipient] = await Promise.all([
+    const [requester, recipient, tripDoc] = await Promise.all([
       usersService.getPublicProfile(conn.requesterId).catch(() => null),
       usersService.getPublicProfile(conn.recipientId).catch(() => null),
+      conn.tripId ? tripsRepository.findTripById(conn.tripId).catch(() => null) : null,
     ]);
+
+    const trip = tripDoc
+      ? {
+          id: tripDoc._id.toHexString(),
+          source: tripDoc.source,
+          destination: tripDoc.destination,
+          travelDate: tripDoc.travelDate,
+          departureTime: tripDoc.departureTime,
+          transportType: tripDoc.transportType,
+          availableSeats: tripDoc.availableSeats,
+        }
+      : null;
 
     return {
       id: conn._id.toHexString(),
@@ -32,6 +45,7 @@ export class ConnectionsService {
       conversationId: conn.conversationId,
       requester,
       recipient,
+      trip,
       createdAt: conn.createdAt.toISOString(),
       updatedAt: conn.updatedAt.toISOString(),
     };
@@ -184,6 +198,17 @@ export class ConnectionsService {
         },
         { $set: { status: 'connected', updatedAt: new Date() } }
       );
+
+      // Decrease available seats for the trip if seats > 0
+      if (conn.tripId) {
+        const tripDoc = await tripsRepository.findTripById(conn.tripId);
+        if (tripDoc && tripDoc.availableSeats !== undefined && tripDoc.availableSeats > 0) {
+          await db.collection(COLLECTIONS.TRIPS).updateOne(
+            { _id: new ObjectId(conn.tripId) },
+            { $inc: { availableSeats: -1 }, $set: { updatedAt: new Date() } }
+          );
+        }
+      }
     } else if (dto.status === 'rejected') {
       if (conn.recipientId !== userId) {
         throw new ForbiddenError('Only the recipient can reject a connection request');

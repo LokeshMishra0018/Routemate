@@ -8,8 +8,30 @@ import { createSuccessResponse } from '../../utils/response.js';
 export const usersRoutes: FastifyPluginAsync = async (app: FastifyInstance): Promise<void> => {
   // GET /api/v1/me & /api/v1/users/me - Get current user profile
   const handleGetMe = async (request: any, reply: any) => {
-    const user = await usersService.getCurrentUserProfile(request.user!.id);
-    return reply.status(200).send(createSuccessResponse(user));
+    const userProfile = await usersService.getCurrentUserProfile(request.user!.id);
+    return reply.status(200).send(
+      createSuccessResponse({
+        id: userProfile.id,
+        email: userProfile.email,
+        role: userProfile.role,
+        status: userProfile.status,
+        emailVerified: userProfile.emailVerified,
+        user: {
+          id: userProfile.id,
+          email: userProfile.email,
+          role: userProfile.role,
+          status: userProfile.status,
+          emailVerified: userProfile.emailVerified,
+          fullName: userProfile.profile.fullName,
+          avatarUrl: userProfile.profile.avatarUrl,
+          collegeId: userProfile.profile.collegeId,
+          collegeName: userProfile.profile.collegeName,
+          trustScore: userProfile.profile.trustScore,
+          verificationStatus: userProfile.profile.verificationStatus,
+        },
+        profile: userProfile.profile,
+      })
+    );
   };
   app.get('/me', { preHandler: [authenticate] }, handleGetMe);
   app.get('/users/me', { preHandler: [authenticate] }, handleGetMe);

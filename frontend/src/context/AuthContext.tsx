@@ -25,8 +25,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await apiClient.get('/users/me');
       const data = res.data.data;
-      setUser(data.user);
-      setProfile(data.profile);
+      const userObj = data.user || {
+        id: data.id,
+        email: data.email,
+        role: data.role,
+        status: data.status,
+        emailVerified: data.emailVerified,
+        fullName: data.profile?.fullName,
+        avatarUrl: data.profile?.avatarUrl,
+        collegeId: data.profile?.collegeId,
+        collegeName: data.profile?.collegeName,
+        trustScore: data.profile?.trustScore,
+        verificationStatus: data.profile?.verificationStatus,
+      };
+      setUser(userObj);
+      setProfile(data.profile || null);
     } catch {
       setUser(null);
       setProfile(null);

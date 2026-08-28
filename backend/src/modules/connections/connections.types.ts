@@ -38,6 +38,8 @@ export interface ConnectionResponseDto {
   conversationId?: string | null;
   requester?: PublicProfileDto | null;
   recipient?: PublicProfileDto | null;
+  trip?: any | null;
   createdAt: string;
   updatedAt: string;
 }
+

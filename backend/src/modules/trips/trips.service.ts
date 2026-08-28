@@ -21,6 +21,7 @@ export class TripsService {
       id: trip._id.toHexString(),
       userId: trip.userId,
       creator: creatorProfile || null,
+      user: creatorProfile || null,
       source: trip.source,
       destination: trip.destination,
       travelDate: trip.travelDate,
@@ -103,6 +104,11 @@ export class TripsService {
       createdAt: now,
       updatedAt: now,
     });
+
+    // Generate matches immediately in background
+    import('../matching/matching.service.js')
+      .then(({ matchingService }) => matchingService.generateMatchesForTrip(doc._id.toHexString()))
+      .catch(() => {});
 
     const creatorProfile = await usersService.getPublicProfile(userId).catch(() => null);
     return this.formatTripResponse(doc, creatorProfile);

@@ -123,6 +123,25 @@ export class MatchingService {
         });
 
         generatedMatches.push(matchDoc);
+
+        // Also upsert reverse candidate -> target match so candidate immediately discovers this match
+        await matchingRepository.upsertMatch({
+          tripId: candidateTrip._id.toHexString(),
+          candidateTripId: targetTrip._id.toHexString(),
+          userId: candidateTrip.userId,
+          candidateUserId: targetTrip.userId,
+          score: evaluation.scores.score,
+          routeScore: evaluation.scores.routeScore,
+          destinationScore: evaluation.scores.destinationScore,
+          dateScore: evaluation.scores.dateScore,
+          timeScore: evaluation.scores.timeScore,
+          transportScore: evaluation.scores.transportScore,
+          preferenceScore: evaluation.scores.preferenceScore,
+          explanation,
+          status: 'active',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }).catch(() => {});
       }
     }
 
@@ -145,14 +164,9 @@ export class MatchingService {
       throw new ForbiddenError('You do not have permission to view matches for this trip');
     }
 
-    // Trigger on-demand generation if no matches exist yet
-    let { items, totalCount } = await matchingRepository.findMatchesByTripId(tripId, page, pageSize);
-    if (totalCount === 0) {
-      await this.generateMatchesForTrip(tripId);
-      const refreshed = await matchingRepository.findMatchesByTripId(tripId, page, pageSize);
-      items = refreshed.items;
-      totalCount = refreshed.totalCount;
-    }
+    // Trigger on-demand generation to ensure any newly added trips are immediately evaluated
+    await this.generateMatchesForTrip(tripId).catch(() => {});
+    const { items, totalCount } = await matchingRepository.findMatchesByTripId(tripId, page, pageSize);
 
     const formatted = await Promise.all(items.map((m) => this.formatMatchDto(m)));
 

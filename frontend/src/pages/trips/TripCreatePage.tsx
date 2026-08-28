@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   MapPin,
   Calendar,
@@ -29,6 +30,7 @@ interface StopItem {
 export const TripCreatePage: React.FC = () => {
   const navigate = useNavigate();
   const { success, error } = useToast();
+  const queryClient = useQueryClient();
 
   const [sourceName, setSourceName] = useState('');
   const [destName, setDestName] = useState('');
@@ -112,6 +114,8 @@ export const TripCreatePage: React.FC = () => {
       const res = await apiClient.post('/trips', payload);
       const tripId = res.data.data.id;
       success('Trip Published', 'Your travel plan has been scheduled.');
+      queryClient.invalidateQueries({ queryKey: ['trips-list'] });
+      queryClient.invalidateQueries({ queryKey: ['my-trips-dashboard'] });
       navigate(`/matches?tripId=${tripId}`);
     } catch (err: unknown) {
       if (err instanceof Error) {

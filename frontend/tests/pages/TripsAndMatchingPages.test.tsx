@@ -135,9 +135,11 @@ describe('Trips & Matching Feature Tests', () => {
 
       render(
         <QueryClientProvider client={createTestQueryClient()}>
-          <BrowserRouter>
-            <TripsListPage />
-          </BrowserRouter>
+          <AuthContext.Provider value={mockAuthValue}>
+            <BrowserRouter>
+              <TripsListPage />
+            </BrowserRouter>
+          </AuthContext.Provider>
         </QueryClientProvider>
       );
 

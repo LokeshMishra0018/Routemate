@@ -39,6 +39,7 @@ export const apiV1Routes: FastifyPluginAsync = async (app: FastifyInstance): Pro
   await app.register(connectionsRoutes, { prefix: '/connections' });
   await app.register(groupsRoutes, { prefix: '/groups' });
   await app.register(messagingRoutes, { prefix: '/conversations' });
+  await app.register(messagingRoutes, { prefix: '/messaging/conversations' });
   await app.register(notificationsRoutes, { prefix: '/notifications' });
   await app.register(reviewsRoutes, { prefix: '/reviews' });
   await app.register(safetyRoutes, { prefix: '/safety' });

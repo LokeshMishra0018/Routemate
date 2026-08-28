@@ -84,6 +84,7 @@ export interface TripResponseDto {
   id: string;
   userId: string;
   creator?: PublicProfileDto | null;
+  user?: PublicProfileDto | null;
   source: LocationPoint;
   destination: LocationPoint;
   travelDate: string;
@@ -103,6 +104,7 @@ export interface TripResponseDto {
 }
 
 export interface SearchTripsFilter {
+  q?: string;
   sourceName?: string;
   destinationName?: string;
   sourceNear?: { longitude: number; latitude: number; maxDistanceMeters?: number };

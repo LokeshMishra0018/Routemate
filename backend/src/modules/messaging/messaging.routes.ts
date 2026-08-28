@@ -4,10 +4,26 @@ import { sendMessageSchema, listMessagesQuerySchema } from './messaging.schemas.
 import { authenticate } from '../../middleware/auth.js';
 import { validateRequest, paginationQuerySchema } from '../../plugins/validation.js';
 import { createSuccessResponse, createPaginatedResponse } from '../../utils/response.js';
+import { BadRequestError } from '../../utils/errors.js';
 
 export const messagingRoutes: FastifyPluginAsync = async (app: FastifyInstance): Promise<void> => {
   // All messaging endpoints require authentication
   app.addHook('preHandler', authenticate);
+
+  // POST /api/v1/conversations (or /api/v1/messaging/conversations) - Get or create direct conversation
+  app.post('/', async (request, reply) => {
+    const body = request.body as { recipientId?: string; participantId?: string; tripId?: string };
+    const targetUserId = body.recipientId || body.participantId;
+    if (!targetUserId) {
+      throw new BadRequestError('recipientId or participantId is required');
+    }
+    const result = await messagingService.getOrCreateDirectConversation(
+      request.user!.id,
+      targetUserId,
+      body.tripId
+    );
+    return reply.status(200).send(createSuccessResponse(result));
+  });
 
   // GET /api/v1/conversations - List conversations
   app.get(
@@ -60,11 +76,12 @@ export const messagingRoutes: FastifyPluginAsync = async (app: FastifyInstance):
     },
     async (request, reply) => {
       const { id } = request.params as { id: string };
-      const body = request.body as { body: string; messageType?: 'text' | 'system' };
+      const body = request.body as { body?: string; content?: string; messageType?: 'text' | 'system' };
+      const messageText = (body.body || body.content || '').trim();
       const result = await messagingService.sendMessage(
         request.user!.id,
         id,
-        body.body,
+        messageText,
         body.messageType || 'text'
       );
       return reply.status(201).send(createSuccessResponse(result));

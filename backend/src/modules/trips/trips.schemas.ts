@@ -91,14 +91,19 @@ export const updateTripStatusSchema = z.object({
 });
 
 export const searchTripsQuerySchema = z.object({
+  q: z.string().max(150).trim().optional(),
   source: z.string().max(150).trim().optional(),
   destination: z.string().max(150).trim().optional(),
   travelDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   transportType: z.enum(['train', 'bus', 'flight', 'cab', 'personal_vehicle', 'other']).optional(),
   status: z.enum(['planning', 'confirmed', 'upcoming', 'travelling', 'completed', 'cancelled']).optional(),
   genderPreference: z.enum(['any', 'same_gender']).optional(),
+  excludeMe: z.coerce.boolean().optional(),
+  includeMyTrips: z.coerce.boolean().optional(),
+  includeMine: z.coerce.boolean().optional(),
   lat: z.coerce.number().min(-90).max(90).optional(),
   lng: z.coerce.number().min(-180).max(180).optional(),
   radiusKm: z.coerce.number().min(1).max(500).default(50).optional(),

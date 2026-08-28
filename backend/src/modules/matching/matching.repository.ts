@@ -14,6 +14,9 @@ export class MatchingRepository {
       candidateTripId: data.candidateTripId,
     };
 
+    const existing = await this.collection.findOne(filter);
+    const targetStatus = existing?.status === 'dismissed' ? 'dismissed' : (data.status || 'active');
+
     const update = {
       $set: {
         userId: data.userId,
@@ -26,7 +29,7 @@ export class MatchingRepository {
         transportScore: data.transportScore,
         preferenceScore: data.preferenceScore,
         explanation: data.explanation,
-        status: data.status,
+        status: targetStatus,
         updatedAt: new Date(),
       },
       $setOnInsert: {

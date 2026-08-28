@@ -39,14 +39,19 @@ export const tripsRoutes: FastifyPluginAsync = async (app: FastifyInstance): Pro
     },
     async (request, reply) => {
       const query = request.query as {
+        q?: string;
         source?: string;
         destination?: string;
         travelDate?: string;
+        date?: string;
         startDate?: string;
         endDate?: string;
         transportType?: TransportType;
         status?: TripStatus;
         genderPreference?: GenderPreference;
+        excludeMe?: boolean;
+        includeMyTrips?: boolean;
+        includeMine?: boolean;
         lat?: number;
         lng?: number;
         radiusKm?: number;
@@ -54,10 +59,19 @@ export const tripsRoutes: FastifyPluginAsync = async (app: FastifyInstance): Pro
         pageSize?: number;
       };
 
+      const isIncludingMine =
+        query.includeMyTrips === true ||
+        query.includeMine === true ||
+        query.excludeMe === false ||
+        String(query.includeMyTrips) === 'true' ||
+        String(query.includeMine) === 'true' ||
+        String(query.excludeMe) === 'false';
+
       const filters = {
+        q: query.q,
         sourceName: query.source,
         destinationName: query.destination,
-        travelDate: query.travelDate,
+        travelDate: query.travelDate || query.date,
         startDate: query.startDate,
         endDate: query.endDate,
         transportType: query.transportType,
@@ -71,7 +85,7 @@ export const tripsRoutes: FastifyPluginAsync = async (app: FastifyInstance): Pro
                 maxDistanceMeters: (query.radiusKm || 50) * 1000,
               }
             : undefined,
-        excludeUserId: request.user!.id,
+        excludeUserId: isIncludingMine ? undefined : request.user!.id,
         page: query.page || 1,
         pageSize: query.pageSize || 20,
       };

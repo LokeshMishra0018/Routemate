@@ -1,3 +1,4 @@
+import { ObjectId } from 'mongodb';
 import { getDb } from '../../db/mongo.js';
 import { COLLECTIONS } from '../../db/collections.js';
 import { messagingRepository } from './messaging.repository.js';
@@ -11,9 +12,53 @@ import {
   MessageResponseDto,
   MessageType,
 } from './messaging.types.js';
-import { NotFoundError, ForbiddenError } from '../../utils/errors.js';
+import { NotFoundError, ForbiddenError, BadRequestError } from '../../utils/errors.js';
 
 export class MessagingService {
+  /**
+   * Get or create direct 1-on-1 conversation
+   */
+  async getOrCreateDirectConversation(userId: string, recipientId: string, tripId?: string): Promise<ConversationResponseDto> {
+    if (userId === recipientId) {
+      throw new BadRequestError('Cannot start a conversation with yourself');
+    }
+
+    const db = getDb();
+
+    // Check block
+    const block = await db.collection(COLLECTIONS.BLOCKS).findOne({
+      $or: [
+        { blockerId: userId, blockedUserId: recipientId },
+        { blockerId: recipientId, blockedUserId: userId },
+      ],
+    });
+    if (block) {
+      throw new ForbiddenError('Cannot start conversation with this user');
+    }
+
+    let conv = await db.collection<ConversationDocument>(COLLECTIONS.CONVERSATIONS).findOne({
+      type: 'direct',
+      participants: { $all: [userId, recipientId], $size: 2 },
+    });
+
+    if (!conv) {
+      const newConv = {
+        _id: new ObjectId(),
+        type: 'direct' as const,
+        participants: [userId, recipientId],
+        createdBy: userId,
+        tripId: tripId || null,
+        groupId: null,
+        lastMessageAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      await db.collection(COLLECTIONS.CONVERSATIONS).insertOne(newConv as any);
+      conv = newConv as ConversationDocument;
+    }
+
+    return this.formatConversationDto(conv, userId);
+  }
   private async formatConversationDto(conv: ConversationDocument, userId: string): Promise<ConversationResponseDto> {
     const [profiles, unreadCount] = await Promise.all([
       Promise.all(conv.participants.map((pid) => usersService.getPublicProfile(pid).catch(() => null))),

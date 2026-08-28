@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   UserCheck,
   Send,
+  ChevronRight,
 } from 'lucide-react';
 import { apiClient } from '../../services/api.client';
 import { useAuth } from '../../context/AuthContext';
@@ -22,6 +23,7 @@ import { Card } from '../../components/ui/Card';
 import { Tabs } from '../../components/ui/Tabs';
 import { TrustScoreMeter } from '../../components/ui/TrustScoreMeter';
 import { EmptyState, ErrorState, LoadingSpinner } from '../../components/ui/EmptyState';
+import { formatTime } from '../../lib/utils';
 
 export const ConnectionsPage: React.FC = () => {
   const { user } = useAuth();
@@ -59,6 +61,36 @@ export const ConnectionsPage: React.FC = () => {
   const accepted = allConnections?.filter((c) => c.status === 'accepted') || [];
   const outgoing = allConnections?.filter((c) => c.status === 'pending' && c.requesterId === user?.id) || [];
 
+  // Group accepted connections by unique companion ID to eliminate duplicates
+  const groupedBuddies = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        companion: Connection['recipient'] | Connection['requester'] | null;
+        companionId: string;
+        connections: Connection[];
+      }
+    >();
+
+    accepted.forEach((conn) => {
+      const companion = conn.requesterId === user?.id ? conn.recipient : conn.requester;
+      const companionId = conn.requesterId === user?.id ? conn.recipientId : conn.requesterId;
+      if (!companionId) return;
+
+      if (!map.has(companionId)) {
+        map.set(companionId, {
+          companion: companion || null,
+          companionId,
+          connections: [conn],
+        });
+      } else {
+        map.get(companionId)!.connections.push(conn);
+      }
+    });
+
+    return Array.from(map.values());
+  }, [accepted, user?.id]);
+
   // Update connection status mutation
   const updateStatusMutation = useMutation({
     mutationFn: async ({ connectionId, status }: { connectionId: string; status: 'accepted' | 'declined' }) => {
@@ -93,7 +125,7 @@ export const ConnectionsPage: React.FC = () => {
 
   const tabs = [
     { id: 'incoming', label: 'Incoming Requests', count: incoming?.length || 0 },
-    { id: 'accepted', label: 'Travel Buddies', count: accepted.length },
+    { id: 'accepted', label: 'Travel Buddies', count: groupedBuddies.length },
     { id: 'outgoing', label: 'Sent Requests', count: outgoing.length },
   ];
 
@@ -112,7 +144,128 @@ export const ConnectionsPage: React.FC = () => {
       {/* Tabs */}
       <Tabs tabs={tabs} activeTab={activeTab} onChange={(id: string) => setActiveTab(id as 'incoming' | 'accepted' | 'outgoing')} />
 
-      {/* Tab 1: Incoming */}
+      {/* Tab 1: Accepted Travel Buddies (Unique Grouped) */}
+      {activeTab === 'accepted' && (
+        <div className="space-y-4">
+          {allLoading && <LoadingSpinner text="Loading travel buddies..." />}
+          {allError && <ErrorState message="Failed to load connections." />}
+
+          {!allLoading && groupedBuddies.length === 0 && (
+            <EmptyState
+              icon={<UserCheck className="w-7 h-7" />}
+              title="No Confirmed Travel Companions Yet"
+              description="Accept incoming requests or explore matching campus trips to build your verified buddy network."
+              actionLabel="Discover Matches"
+              onAction={() => navigate('/matches')}
+            />
+          )}
+
+          {groupedBuddies.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {groupedBuddies.map(({ companion, companionId, connections }) => {
+                return (
+                  <Card key={companionId} hoverEffect className="glass-card p-5 flex flex-col justify-between space-y-4 shadow-xl border-slate-800">
+                    <div className="space-y-3.5">
+                      {/* Companion Info Header */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Avatar
+                            name={companion?.fullName}
+                            src={companion?.avatarUrl}
+                            verified={companion?.verificationStatus === 'approved'}
+                          />
+                          <div className="min-w-0">
+                            <h4 className="text-sm font-bold text-slate-100 flex items-center gap-1 truncate">
+                              <span className="truncate">{companion?.fullName || 'Travel Companion'}</span>
+                              {companion?.verificationStatus === 'approved' && (
+                                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                              )}
+                            </h4>
+                            <p className="text-xs text-slate-400 truncate">{companion?.collegeName || 'KIET'}</p>
+                          </div>
+                        </div>
+
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 shrink-0">
+                          {connections.length} {connections.length === 1 ? 'Route' : 'Routes'}
+                        </span>
+                      </div>
+
+                      {/* Trust Score */}
+                      <div>
+                        <TrustScoreMeter score={companion?.trustScore || 0} size="sm" />
+                      </div>
+
+                      {/* Connected Routes Sub-list */}
+                      <div className="space-y-1.5 pt-1">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                          Connected Journeys ({connections.length})
+                        </span>
+                        <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                          {connections.map((c) => (
+                            <div
+                              key={c.id}
+                              className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-xs flex items-center justify-between gap-2 hover:border-slate-700 transition-colors"
+                            >
+                              <div className="space-y-0.5 min-w-0">
+                                <div className="font-semibold text-slate-200 truncate flex items-center gap-1">
+                                  <MapPin className="w-3 h-3 text-emerald-400 shrink-0" />
+                                  <span className="truncate">{c.trip?.source?.name || 'Origin'}</span>
+                                  <span className="text-slate-500">→</span>
+                                  <span className="truncate">{c.trip?.destination?.name || 'Destination'}</span>
+                                </div>
+                                {c.trip?.travelDate && (
+                                  <div className="text-[10px] text-slate-400 flex items-center gap-1">
+                                    <Clock className="w-2.5 h-2.5 text-slate-500" />
+                                    <span>
+                                      {c.trip.travelDate}
+                                      {c.trip.departureTime ? ` at ${formatTime(c.trip.departureTime)}` : ''}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+
+                              {c.tripId && (
+                                <Link
+                                  to={`/trips/${c.tripId}`}
+                                  className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 shrink-0 flex items-center"
+                                  title="View Trip Details"
+                                >
+                                  View <ChevronRight className="w-3 h-3" />
+                                </Link>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Footer Actions */}
+                    <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
+                      <Link to={`/profile/${companionId}`} className="flex-1">
+                        <Button size="sm" variant="ghost" className="w-full text-xs text-slate-300 border border-slate-800/80">
+                          Profile
+                        </Button>
+                      </Link>
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        leftIcon={<MessageSquare className="w-3.5 h-3.5" />}
+                        className="flex-1 text-xs bg-indigo-600 hover:bg-indigo-500 shadow-glow"
+                        onClick={() => startChatMutation.mutate(companionId)}
+                        isLoading={startChatMutation.isPending}
+                      >
+                        Message
+                      </Button>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab 2: Incoming Requests */}
       {activeTab === 'incoming' && (
         <div className="space-y-4">
           {incomingLoading && <LoadingSpinner text="Loading requests..." />}
@@ -156,6 +309,20 @@ export const ConnectionsPage: React.FC = () => {
                       </Badge>
                     </div>
 
+                    {conn.trip && (
+                      <div className="p-2.5 rounded-xl bg-indigo-950/30 border border-indigo-500/20 text-xs text-slate-300 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <MapPin className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                          <span className="font-medium truncate">{conn.trip.source?.name} → {conn.trip.destination?.name}</span>
+                        </div>
+                        {conn.trip.travelDate && (
+                          <span className="text-[10px] text-indigo-300 font-semibold shrink-0">
+                            {conn.trip.travelDate}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
                     {conn.message && (
                       <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 italic">
                         &ldquo;{conn.message}&rdquo;
@@ -184,74 +351,6 @@ export const ConnectionsPage: React.FC = () => {
                         isLoading={updateStatusMutation.isPending}
                       >
                         Accept Request
-                      </Button>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Tab 2: Accepted Travel Buddies */}
-      {activeTab === 'accepted' && (
-        <div className="space-y-4">
-          {allLoading && <LoadingSpinner text="Loading travel buddies..." />}
-          {allError && <ErrorState message="Failed to load connections." />}
-
-          {!allLoading && accepted.length === 0 && (
-            <EmptyState
-              icon={<UserCheck className="w-7 h-7" />}
-              title="No Confirmed Travel Companions Yet"
-              description="Accept incoming requests or explore matching campus trips to build your verified buddy network."
-              actionLabel="Discover Matches"
-              onAction={() => navigate('/matches')}
-            />
-          )}
-
-          {accepted.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {accepted.map((conn) => {
-                const companion = conn.requesterId === user?.id ? conn.recipient : conn.requester;
-                const companionId = conn.requesterId === user?.id ? conn.recipientId : conn.requesterId;
-
-                return (
-                  <Card key={conn.id} hoverEffect className="glass-card p-5 flex flex-col justify-between space-y-4">
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-3">
-                        <Avatar
-                          name={companion?.fullName}
-                          src={companion?.avatarUrl}
-                          verified={companion?.verificationStatus === 'approved'}
-                        />
-                        <div>
-                          <h4 className="text-sm font-bold text-slate-100 flex items-center gap-1">
-                            {companion?.fullName || 'Travel Companion'}
-                          </h4>
-                          <p className="text-xs text-slate-400">{companion?.collegeName || 'KIET'}</p>
-                        </div>
-                      </div>
-
-                      <div className="pt-2">
-                        <TrustScoreMeter score={companion?.trustScore || 0} size="sm" />
-                      </div>
-                    </div>
-
-                    <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
-                      <Link to={`/profile/${companionId}`}>
-                        <Button size="sm" variant="ghost" className="text-xs">
-                          Profile
-                        </Button>
-                      </Link>
-                      <Button
-                        size="sm"
-                        variant="primary"
-                        leftIcon={<MessageSquare className="w-3.5 h-3.5" />}
-                        onClick={() => startChatMutation.mutate(companionId)}
-                        isLoading={startChatMutation.isPending}
-                      >
-                        Message
                       </Button>
                     </div>
                   </Card>
@@ -292,6 +391,20 @@ export const ConnectionsPage: React.FC = () => {
                       </Badge>
                     </div>
 
+                    {conn.trip && (
+                      <div className="p-2.5 rounded-xl bg-indigo-950/30 border border-indigo-500/20 text-xs text-slate-300 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <MapPin className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                          <span className="font-medium truncate">{conn.trip.source?.name} → {conn.trip.destination?.name}</span>
+                        </div>
+                        {conn.trip.travelDate && (
+                          <span className="text-[10px] text-indigo-300 font-semibold shrink-0">
+                            {conn.trip.travelDate}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
                     {conn.message && (
                       <p className="text-xs text-slate-300 italic bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
                         &ldquo;{conn.message}&rdquo;
@@ -307,3 +420,4 @@ export const ConnectionsPage: React.FC = () => {
     </div>
   );
 };
+

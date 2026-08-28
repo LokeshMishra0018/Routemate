@@ -35,7 +35,7 @@ export const DashboardPage: React.FC = () => {
   } = useQuery({
     queryKey: ['my-trips-dashboard'],
     queryFn: async () => {
-      const res = await apiClient.get('/trips?limit=3');
+      const res = await apiClient.get('/trips/me?limit=3');
       return res.data.data as Trip[];
     },
   });
