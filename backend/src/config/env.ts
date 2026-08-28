@@ -42,6 +42,8 @@ const rawEnvSchema = z
     REDIS_URL: z.string().optional(),
     SOCKET_CORS_ORIGIN: z.string().optional(),
     GOOGLE_CLIENT_ID: z.string().optional(),
+    RESEND_API_KEY: z.string().optional(),
+    BREVO_API_KEY: z.string().optional(),
     SMTP_HOST: z.string().optional(),
     SMTP_PORT: z
       .string()
@@ -132,6 +134,8 @@ const rawEnvSchema = z
       SOCKET_CORS_ORIGIN:
         data.SOCKET_CORS_ORIGIN && data.SOCKET_CORS_ORIGIN.trim().length > 0 ? data.SOCKET_CORS_ORIGIN : defaultCors,
       GOOGLE_CLIENT_ID: data.GOOGLE_CLIENT_ID,
+      RESEND_API_KEY: data.RESEND_API_KEY,
+      BREVO_API_KEY: data.BREVO_API_KEY,
       SMTP_HOST: data.SMTP_HOST,
       SMTP_PORT: data.SMTP_PORT,
       SMTP_USER: data.SMTP_USER,

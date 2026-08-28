@@ -30,28 +30,112 @@ export class NodemailerEmailProvider implements EmailProvider {
           user: smtpUser,
           pass: smtpPass,
         },
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 15000,
+        connectionTimeout: 8000,
+        greetingTimeout: 8000,
+        socketTimeout: 10000,
       });
     }
     return this.transporter;
   }
 
   async verifyTransport(): Promise<boolean> {
+    const env = getEnv();
+    if (env.RESEND_API_KEY) {
+      console.log('[EMAIL][INIT] ✅ Resend HTTPS API configured (Port 443 - Render/Cloud guaranteed).');
+      return true;
+    }
+    if (env.BREVO_API_KEY) {
+      console.log('[EMAIL][INIT] ✅ Brevo HTTPS API configured (Port 443 - Render/Cloud guaranteed).');
+      return true;
+    }
+
     const transporter = this.getTransporter();
     if (!transporter) {
-      console.log('[SMTP][INIT] No live SMTP credentials configured. Emails will be logged to console.');
+      console.log('[EMAIL][INIT] ℹ️ No live email credentials configured. Emails will be logged to console.');
       return false;
     }
 
     try {
       await transporter.verify();
-      console.log('[SMTP][INIT] ✅ SMTP transport verified successfully and connected to mail server.');
+      console.log('[EMAIL][INIT] ✅ SMTP transport verified successfully and connected to mail server.');
       return true;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error('[SMTP][INIT] ❌ Primary SMTP transport verification failed:', message);
+      console.error('[EMAIL][INIT] ❌ SMTP transport verification note:', message);
+      return false;
+    }
+  }
+
+  private async sendViaResend(to: string, subject: string, html: string, text: string): Promise<boolean> {
+    const env = getEnv();
+    if (!env.RESEND_API_KEY) return false;
+
+    try {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${env.RESEND_API_KEY.trim()}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: env.SMTP_FROM || 'RouteMate <onboarding@resend.dev>',
+          to: [to],
+          subject,
+          html,
+          text,
+        }),
+      });
+
+      if (!response.ok) {
+        const errBody = await response.text();
+        console.error(`[EMAIL][RESEND_ERROR] Status ${response.status}: ${errBody}`);
+        return false;
+      }
+
+      const resData = (await response.json()) as { id?: string };
+      console.log(`[EMAIL][SUCCESS] Sent via Resend HTTPS API to ${to}. ID: ${resData.id}`);
+      return true;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[EMAIL][RESEND_ERROR] Failed to send via Resend API:', msg);
+      return false;
+    }
+  }
+
+  private async sendViaBrevo(to: string, subject: string, html: string, text: string): Promise<boolean> {
+    const env = getEnv();
+    if (!env.BREVO_API_KEY) return false;
+
+    try {
+      const fromEmail = env.SMTP_USER?.trim() || 'lokesh.2327cs1097@kiet.edu';
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': env.BREVO_API_KEY.trim(),
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          sender: { name: 'RouteMate', email: fromEmail },
+          to: [{ email: to }],
+          subject,
+          htmlContent: html,
+          textContent: text,
+        }),
+      });
+
+      if (!response.ok) {
+        const errBody = await response.text();
+        console.error(`[EMAIL][BREVO_ERROR] Status ${response.status}: ${errBody}`);
+        return false;
+      }
+
+      const resData = (await response.json()) as { messageId?: string };
+      console.log(`[EMAIL][SUCCESS] Sent via Brevo HTTPS API to ${to}. MessageId: ${resData.messageId}`);
+      return true;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[EMAIL][BREVO_ERROR] Failed to send via Brevo API:', msg);
       return false;
     }
   }
@@ -60,16 +144,12 @@ export class NodemailerEmailProvider implements EmailProvider {
     const env = getEnv();
     const studentName = name || 'Student';
     const fromAddress = env.SMTP_USER ? `RouteMate <${env.SMTP_USER.trim()}>` : env.EMAIL_FROM;
+    const subject = `RouteMate Verification Code: ${otp}`;
+    const textContent = `Hello ${studentName},\n\nYour RouteMate 6-digit verification code is: ${otp}\n\nThis code expires in 10 minutes.\n\nRouteMate Team`;
 
     // Record in memory for tests/diagnostics
     lastSentEmails.push({ to, type: 'VERIFICATION', token: otp, timestamp: new Date() });
     console.log(`[EMAIL][VERIFY] From: ${fromAddress} | To: ${to} (${studentName}) | 6-Digit OTP: ${otp}`);
-
-    const transporter = this.getTransporter();
-    if (!transporter) {
-      console.warn('[EMAIL][WARN] No SMTP transporter configured. Email was not dispatched over network.');
-      return;
-    }
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -109,12 +189,29 @@ export class NodemailerEmailProvider implements EmailProvider {
       </html>
     `;
 
+    // 1. Try HTTPS API Providers (Resend / Brevo) first (guaranteed on Render)
+    if (env.RESEND_API_KEY) {
+      const sent = await this.sendViaResend(to, subject, htmlContent, textContent);
+      if (sent) return;
+    }
+    if (env.BREVO_API_KEY) {
+      const sent = await this.sendViaBrevo(to, subject, htmlContent, textContent);
+      if (sent) return;
+    }
+
+    // 2. Try Nodemailer SMTP
+    const transporter = this.getTransporter();
+    if (!transporter) {
+      console.warn('[EMAIL][WARN] No SMTP or HTTPS email provider active. Email logged to console.');
+      return;
+    }
+
     try {
       const info = await transporter.sendMail({
         from: fromAddress,
         to,
-        subject: `RouteMate Verification Code: ${otp}`,
-        text: `Hello ${studentName},\n\nYour RouteMate 6-digit verification code is: ${otp}\n\nThis code expires in 10 minutes.\n\nRouteMate Team`,
+        subject,
+        text: textContent,
         html: htmlContent,
       });
       console.log(`[EMAIL][SUCCESS] Sent verification email to ${to}. MessageId: ${info.messageId}`);
@@ -124,7 +221,6 @@ export class NodemailerEmailProvider implements EmailProvider {
 
       // Automatic Fallback to Port 587 STARTTLS
       if (env.SMTP_USER && env.SMTP_PASS) {
-        console.log('[EMAIL][RETRY] Retrying delivery via fallback port 587 (STARTTLS)...');
         try {
           const fallbackTransporter = nodemailer.createTransport({
             host: 'smtp.gmail.com',
@@ -134,15 +230,15 @@ export class NodemailerEmailProvider implements EmailProvider {
               user: env.SMTP_USER.trim(),
               pass: env.SMTP_PASS.replace(/\s+/g, '').replace(/["']/g, '').trim(),
             },
-            connectionTimeout: 10000,
-            greetingTimeout: 10000,
-            socketTimeout: 15000,
+            connectionTimeout: 8000,
+            greetingTimeout: 8000,
+            socketTimeout: 10000,
           });
           const fallbackInfo = await fallbackTransporter.sendMail({
             from: fromAddress,
             to,
-            subject: `RouteMate Verification Code: ${otp}`,
-            text: `Hello ${studentName},\n\nYour RouteMate 6-digit verification code is: ${otp}\n\nThis code expires in 10 minutes.\n\nRouteMate Team`,
+            subject,
+            text: textContent,
             html: htmlContent,
           });
           console.log(`[EMAIL][SUCCESS] Fallback port 587 successfully sent email to ${to}. MessageId: ${fallbackInfo.messageId}`);
@@ -158,15 +254,11 @@ export class NodemailerEmailProvider implements EmailProvider {
     const env = getEnv();
     const studentName = name || 'Student';
     const fromAddress = env.SMTP_USER ? `RouteMate <${env.SMTP_USER.trim()}>` : env.EMAIL_FROM;
+    const subject = `RouteMate Password Reset Code: ${otp}`;
+    const textContent = `Hello ${studentName},\n\nYour RouteMate 6-digit password reset code is: ${otp}\n\nThis code expires in 10 minutes.\n\nRouteMate Team`;
 
     lastSentEmails.push({ to, type: 'PASSWORD_RESET', token: otp, timestamp: new Date() });
     console.log(`[EMAIL][RESET_PASSWORD] From: ${fromAddress} | To: ${to} (${studentName}) | 6-Digit OTP: ${otp}`);
-
-    const transporter = this.getTransporter();
-    if (!transporter) {
-      console.warn('[EMAIL][WARN] No SMTP transporter configured. Email was not dispatched over network.');
-      return;
-    }
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -205,12 +297,27 @@ export class NodemailerEmailProvider implements EmailProvider {
       </html>
     `;
 
+    if (env.RESEND_API_KEY) {
+      const sent = await this.sendViaResend(to, subject, htmlContent, textContent);
+      if (sent) return;
+    }
+    if (env.BREVO_API_KEY) {
+      const sent = await this.sendViaBrevo(to, subject, htmlContent, textContent);
+      if (sent) return;
+    }
+
+    const transporter = this.getTransporter();
+    if (!transporter) {
+      console.warn('[EMAIL][WARN] No SMTP or HTTPS email provider active.');
+      return;
+    }
+
     try {
       const info = await transporter.sendMail({
         from: fromAddress,
         to,
-        subject: `RouteMate Password Reset Code: ${otp}`,
-        text: `Hello ${studentName},\n\nYour RouteMate 6-digit password reset code is: ${otp}\n\nThis code expires in 10 minutes.\n\nRouteMate Team`,
+        subject,
+        text: textContent,
         html: htmlContent,
       });
       console.log(`[EMAIL][SUCCESS] Sent password reset email to ${to}. MessageId: ${info.messageId}`);
