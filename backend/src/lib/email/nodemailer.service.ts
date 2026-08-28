@@ -3,19 +3,26 @@ import nodemailer from 'nodemailer';
 import { EmailProvider, lastSentEmails } from './email.interface.js';
 import { getEnv } from '../../config/env.js';
 
-// Custom DNS lookup that strictly forces IPv4 resolution on cloud environments
-function ipv4Lookup(hostname: string, options: any, callback: any) {
-  if (typeof options === 'function') {
-    callback = options;
-    options = {};
+async function resolveDirectIPv4(host: string): Promise<string> {
+  // If host is already an IP, return as-is
+  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(host)) {
+    return host;
   }
-  return dns.lookup(hostname, { ...options, family: 4, all: false }, callback);
+  try {
+    const ips = await dns.promises.resolve4(host);
+    if (ips && ips.length > 0) {
+      return ips[0];
+    }
+  } catch {
+    // If resolve4 fails, fallback to hostname
+  }
+  return host;
 }
 
 export class NodemailerEmailProvider implements EmailProvider {
   private transporter: nodemailer.Transporter | null = null;
 
-  private getTransporter(): nodemailer.Transporter | null {
+  private async getTransporterAsync(): Promise<nodemailer.Transporter | null> {
     if (this.transporter) {
       return this.transporter;
     }
@@ -28,22 +35,27 @@ export class NodemailerEmailProvider implements EmailProvider {
     if (env.SMTP_USER && env.SMTP_PASS) {
       const smtpUser = env.SMTP_USER.trim();
       const smtpPass = env.SMTP_PASS.replace(/\s+/g, '').replace(/["']/g, '').trim();
-      const host = env.SMTP_HOST || 'smtp.gmail.com';
+      const originalHost = env.SMTP_HOST || 'smtp.gmail.com';
       const port = env.SMTP_PORT || 587;
       const secure = env.SMTP_SECURE !== undefined ? env.SMTP_SECURE : port === 465;
 
+      const directIpv4Host = await resolveDirectIPv4(originalHost);
+
       this.transporter = nodemailer.createTransport({
-        host,
+        host: directIpv4Host,
         port,
         secure,
-        lookup: ipv4Lookup,
+        tls: {
+          servername: originalHost,
+          rejectUnauthorized: false,
+        },
         auth: {
           user: smtpUser,
           pass: smtpPass,
         },
-        connectionTimeout: 8000,
-        greetingTimeout: 8000,
-        socketTimeout: 10000,
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
       } as any);
     }
     return this.transporter;
@@ -60,7 +72,7 @@ export class NodemailerEmailProvider implements EmailProvider {
       return true;
     }
 
-    const transporter = this.getTransporter();
+    const transporter = await this.getTransporterAsync();
     if (!transporter) {
       console.log('[EMAIL][INIT] ℹ️ No live email credentials configured. Emails will be logged to console.');
       return false;
@@ -72,7 +84,7 @@ export class NodemailerEmailProvider implements EmailProvider {
       return true;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error('[EMAIL][INIT] ❌ Primary SMTP transport verification failed:', message);
+      console.error('[EMAIL][INIT] ❌ Primary SMTP transport verification note:', message);
       return false;
     }
   }
@@ -210,8 +222,8 @@ export class NodemailerEmailProvider implements EmailProvider {
       if (sent) return;
     }
 
-    // 2. Try Nodemailer SMTP with IPv4
-    const transporter = this.getTransporter();
+    // 2. Try Nodemailer SMTP with Direct IPv4
+    const transporter = await this.getTransporterAsync();
     if (!transporter) {
       console.warn('[EMAIL][WARN] No SMTP or HTTPS email provider active. Email logged to console.');
       return;
@@ -230,21 +242,25 @@ export class NodemailerEmailProvider implements EmailProvider {
       const msg = err instanceof Error ? err.message : String(err);
       console.error('[EMAIL][ERROR] Primary SMTP send failed:', msg);
 
-      // Automatic Fallback to Port 587 STARTTLS with IPv4
+      // Automatic Fallback to Port 587 STARTTLS with Direct IPv4
       if (env.SMTP_USER && env.SMTP_PASS) {
         try {
+          const directIpv4 = await resolveDirectIPv4('smtp.gmail.com');
           const fallbackTransporter = nodemailer.createTransport({
-            host: 'smtp.gmail.com',
+            host: directIpv4,
             port: 587,
             secure: false,
-            lookup: ipv4Lookup,
+            tls: {
+              servername: 'smtp.gmail.com',
+              rejectUnauthorized: false,
+            },
             auth: {
               user: env.SMTP_USER.trim(),
               pass: env.SMTP_PASS.replace(/\s+/g, '').replace(/["']/g, '').trim(),
             },
-            connectionTimeout: 8000,
-            greetingTimeout: 8000,
-            socketTimeout: 10000,
+            connectionTimeout: 10000,
+            greetingTimeout: 10000,
+            socketTimeout: 15000,
           } as any);
           const fallbackInfo = await fallbackTransporter.sendMail({
             from: fromAddress,
@@ -318,7 +334,7 @@ export class NodemailerEmailProvider implements EmailProvider {
       if (sent) return;
     }
 
-    const transporter = this.getTransporter();
+    const transporter = await this.getTransporterAsync();
     if (!transporter) {
       console.warn('[EMAIL][WARN] No SMTP or HTTPS email provider active.');
       return;
@@ -345,7 +361,7 @@ export class NodemailerEmailProvider implements EmailProvider {
     lastSentEmails.push({ to, type: `VERIFICATION_${status.toUpperCase()}`, timestamp: new Date() });
     console.log(`[EMAIL][STATUS] From: ${fromAddress} | To: ${to} | Status: ${status} | Reason: ${reason || 'N/A'}`);
 
-    const transporter = this.getTransporter();
+    const transporter = await this.getTransporterAsync();
     if (!transporter) {
       return;
     }
