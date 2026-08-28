@@ -11,7 +11,7 @@ export function computeVerificationTier(
   role?: UserRole | string | null
 ): VerificationTier {
   if (role === 'admin') return 'admin';
-  if (role === 'moderator') return 'moderator';
+  if (role === 'moderator') return 'fully_verified';
   const isEmailVerified = Boolean(emailVerified);
   if (!isEmailVerified) {
     return 'unverified';

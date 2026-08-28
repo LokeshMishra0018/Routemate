@@ -61,7 +61,7 @@ export const Avatar: React.FC<AvatarProps> = ({
     xl: 'w-16 h-16 text-lg',
   };
 
-  const isAdmin = role === 'admin' || role === 'moderator';
+  const isAdmin = role === 'admin';
 
   const initials = name
     ? name

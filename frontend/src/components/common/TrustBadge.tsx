@@ -31,18 +31,14 @@ export const TrustBadge: React.FC<TrustBadgeProps> = ({
   showTooltip = true,
 }) => {
   const isAdmin = role === 'admin' || tier === 'admin';
-  const isModerator = role === 'moderator' || tier === 'moderator';
 
-  const normalizedTier: VerificationTier =
-    isAdmin
-      ? 'admin'
-      : isModerator
-        ? 'moderator'
-        : tier === 'fully_verified' || tier === 'approved'
-          ? 'fully_verified'
-          : tier === 'unverified'
-            ? 'unverified'
-            : 'partially_verified';
+  const normalizedTier: VerificationTier = isAdmin
+    ? 'admin'
+    : tier === 'fully_verified' || tier === 'approved' || role === 'moderator' || tier === 'moderator'
+      ? 'fully_verified'
+      : tier === 'unverified'
+        ? 'unverified'
+        : 'partially_verified';
 
   // Sizing map for the SVG medallion icon
   const sizeClasses = {
@@ -59,10 +55,10 @@ export const TrustBadge: React.FC<TrustBadgeProps> = ({
     lg: 'text-base px-4 py-2 gap-2.5',
   };
 
-  // 0. Admin & Moderator: Twitter Gold Scalloped Badge with White Checkmark Tick (🌟)
-  if (normalizedTier === 'admin' || normalizedTier === 'moderator') {
-    const titleText = normalizedTier === 'admin' ? 'Campus Administrator (Official)' : 'Campus Moderator (Official)';
-    const labelText = normalizedTier === 'admin' ? 'Campus Admin' : 'Campus Moderator';
+  // 0. Admin ONLY: Twitter Gold Scalloped Badge with White Checkmark Tick (🌟)
+  if (normalizedTier === 'admin') {
+    const titleText = 'Campus Administrator (Official)';
+    const labelText = 'Campus Admin';
 
     const icon = (
       <svg
