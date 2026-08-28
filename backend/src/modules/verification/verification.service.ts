@@ -46,6 +46,7 @@ export class VerificationService {
       documentStorageKey: storageKey,
       documentMimeType: mimeType,
       documentSize: size,
+      documentBase64: fileBuffer.toString('base64'),
       status: 'pending',
       reviewerId: null,
       reviewedAt: null,

@@ -9,6 +9,7 @@ export interface VerificationRequestDocument {
   documentStorageKey: string;
   documentMimeType: string;
   documentSize: number;
+  documentBase64?: string | null;
   status: VerificationRequestStatus;
   reviewerId: string | null;
   reviewedAt: Date | null;

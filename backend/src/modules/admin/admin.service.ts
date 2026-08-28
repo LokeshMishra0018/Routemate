@@ -88,17 +88,28 @@ export class AdminService {
       throw new NotFoundError('Verification request not found');
     }
 
-    const storageProvider = getStorageProvider();
-    const fileData = await storageProvider.getPrivateFileBuffer(doc.documentStorageKey);
-    if (!fileData) {
-      throw new NotFoundError('Verification document file not found in storage');
+    // 1. Direct MongoDB Base64 buffer (cloud/Render persistence)
+    if (doc.documentBase64) {
+      const buffer = Buffer.from(doc.documentBase64, 'base64');
+      return {
+        buffer,
+        mimeType: doc.documentMimeType || 'image/png',
+        filename: `student_id_${doc.userId}_${verificationId}`,
+      };
     }
 
-    return {
-      buffer: fileData.buffer,
-      mimeType: doc.documentMimeType || fileData.mimeType || 'image/jpeg',
-      filename: `student_id_${doc.userId}_${verificationId}`,
-    };
+    // 2. Storage provider fallback (local disk / S3)
+    const storageProvider = getStorageProvider();
+    const fileData = await storageProvider.getPrivateFileBuffer(doc.documentStorageKey);
+    if (fileData) {
+      return {
+        buffer: fileData.buffer,
+        mimeType: doc.documentMimeType || fileData.mimeType || 'image/jpeg',
+        filename: `student_id_${doc.userId}_${verificationId}`,
+      };
+    }
+
+    throw new NotFoundError('Verification document file not found');
   }
 
   /**
