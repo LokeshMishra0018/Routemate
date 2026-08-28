@@ -6,35 +6,47 @@ export interface EmailProvider {
   sendVerificationStatusEmail(to: string, status: 'approved' | 'rejected', reason?: string): Promise<void>;
 }
 
+export interface SentEmailRecord {
+  to: string;
+  type: string;
+  token?: string;
+  timestamp: Date;
+}
+
+export const lastSentEmails: SentEmailRecord[] = [];
+
 export class DevEmailProvider implements EmailProvider {
-  // In-memory record of sent emails for automated test assertion
-  public static lastSentEmails: Array<{ to: string; type: string; token?: string; timestamp: Date }> = [];
+  // Static alias for test assertions
+  public static get lastSentEmails(): SentEmailRecord[] {
+    return lastSentEmails;
+  }
 
   async sendVerificationEmail(to: string, token: string, name?: string): Promise<void> {
     const from = getEnv().EMAIL_FROM;
-    console.log(`[EMAIL][VERIFY] From: ${from} | To: ${to} (${name || 'Student'}) | Token: ${token}`);
-    DevEmailProvider.lastSentEmails.push({ to, type: 'VERIFICATION', token, timestamp: new Date() });
+    console.log(`[EMAIL][VERIFY] From: ${from} | To: ${to} (${name || 'Student'}) | OTP: ${token}`);
+    lastSentEmails.push({ to, type: 'VERIFICATION', token, timestamp: new Date() });
   }
 
   async sendPasswordResetEmail(to: string, token: string, name?: string): Promise<void> {
     const from = getEnv().EMAIL_FROM;
-    console.log(`[EMAIL][RESET_PASSWORD] From: ${from} | To: ${to} (${name || 'Student'}) | Token: ${token}`);
-    DevEmailProvider.lastSentEmails.push({ to, type: 'PASSWORD_RESET', token, timestamp: new Date() });
+    console.log(`[EMAIL][RESET_PASSWORD] From: ${from} | To: ${to} (${name || 'Student'}) | OTP: ${token}`);
+    lastSentEmails.push({ to, type: 'PASSWORD_RESET', token, timestamp: new Date() });
   }
 
   async sendVerificationStatusEmail(to: string, status: 'approved' | 'rejected', reason?: string): Promise<void> {
     const from = getEnv().EMAIL_FROM;
     console.log(`[EMAIL][STATUS] From: ${from} | To: ${to} | Status: ${status} | Reason: ${reason || 'N/A'}`);
-    DevEmailProvider.lastSentEmails.push({ to, type: `VERIFICATION_${status.toUpperCase()}`, timestamp: new Date() });
+    lastSentEmails.push({ to, type: `VERIFICATION_${status.toUpperCase()}`, timestamp: new Date() });
   }
 }
+
+import { NodemailerEmailProvider } from './nodemailer.service.js';
 
 let emailProviderInstance: EmailProvider | null = null;
 
 export function getEmailProvider(): EmailProvider {
   if (!emailProviderInstance) {
-    // In production or development without external SMTP/Resend API, use DevEmailProvider
-    emailProviderInstance = new DevEmailProvider();
+    emailProviderInstance = new NodemailerEmailProvider();
   }
   return emailProviderInstance;
 }

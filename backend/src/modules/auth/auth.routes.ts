@@ -4,6 +4,7 @@ import {
   registerSchema,
   loginSchema,
   verifyEmailSchema,
+  resendOtpSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
   refreshTokenSchema,
@@ -45,8 +46,20 @@ export const authRoutes: FastifyPluginAsync = async (app: FastifyInstance): Prom
       preValidation: [validateRequest({ body: verifyEmailSchema })],
     },
     async (request, reply) => {
-      const { token } = request.body as { token: string };
-      const result = await authService.verifyEmail(token);
+      const result = await authService.verifyEmail(request.body as any);
+      return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
+
+  // POST /api/v1/auth/resend-otp
+  app.post(
+    '/resend-otp',
+    {
+      preValidation: [validateRequest({ body: resendOtpSchema })],
+    },
+    async (request, reply) => {
+      const { email } = request.body as { email: string };
+      const result = await authService.resendVerificationOtp(email);
       return reply.status(200).send(createSuccessResponse(result));
     }
   );
@@ -120,8 +133,7 @@ export const authRoutes: FastifyPluginAsync = async (app: FastifyInstance): Prom
       preValidation: [validateRequest({ body: resetPasswordSchema })],
     },
     async (request, reply) => {
-      const { token, password } = request.body as { token: string; password: string };
-      const result = await authService.resetPassword(token, password);
+      const result = await authService.resetPassword(request.body as any);
       return reply.status(200).send(createSuccessResponse(result));
     }
   );

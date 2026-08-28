@@ -1,6 +1,6 @@
 import { usersRepository } from '../users/users.repository.js';
 import { collegesService } from '../colleges/colleges.service.js';
-import { hashPassword, verifyPassword, hashToken, generateRandomToken } from '../../lib/crypto.js';
+import { hashPassword, verifyPassword, hashToken, generateRandomToken, generateNumericOtp } from '../../lib/crypto.js';
 import { generateAccessToken, generateRefreshToken } from '../../lib/jwt.js';
 import { getEmailProvider } from '../../lib/email/email.interface.js';
 import { ConflictError, UnauthorizedError, ValidationError, ForbiddenError } from '../../utils/errors.js';
@@ -27,9 +27,10 @@ export class AuthService {
     const passwordHash = await hashPassword(input.password);
 
     // 4. Generate email verification token (24-hour expiration)
-    const rawVerificationToken = generateRandomToken(32);
-    const verificationTokenHash = hashToken(rawVerificationToken);
-    const verificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    // 4. Generate 6-digit numerical verification OTP with 10-minute validity
+    const rawOtp = generateNumericOtp(6);
+    const verificationTokenHash = hashToken(rawOtp);
+    const verificationExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
     const now = new Date();
 
@@ -68,24 +69,52 @@ export class AuthService {
       updatedAt: now,
     });
 
-    // 7. Send verification email via provider
+    // 7. Send verification OTP email via provider
     const emailProvider = getEmailProvider();
-    await emailProvider.sendVerificationEmail(input.email, rawVerificationToken, input.fullName);
+    await emailProvider.sendVerificationEmail(input.email, rawOtp, input.fullName);
 
     return {
       userId: user._id.toHexString(),
       email: user.email,
       college: { id: college.id, name: college.name, domain: college.domain },
       requiresEmailVerification: true,
+      otpSent: true,
     };
   }
 
   /**
-   * Verify student email address with verification token
+   * Verify student email address with 6-digit OTP or legacy verification token
    */
-  async verifyEmail(token: string) {
-    const tokenHash = hashToken(token.trim());
-    const user = await usersRepository.findUserByVerificationTokenHash(tokenHash);
+  async verifyEmail(input: string | { token?: string; otp?: string; email?: string }) {
+    let tokenHash: string;
+    let user = null;
+
+    if (typeof input === 'string') {
+      tokenHash = hashToken(input.trim());
+      user = await usersRepository.findUserByVerificationTokenHash(tokenHash);
+    } else {
+      const code = (input.otp || input.token || '').trim();
+      if (!code) {
+        throw new ValidationError('Verification code is required');
+      }
+      tokenHash = hashToken(code);
+
+      if (input.email) {
+        const foundUser = await usersRepository.findUserByEmailNormalized(input.email.toLowerCase().trim());
+        if (
+          foundUser &&
+          foundUser.emailVerificationTokenHash === tokenHash &&
+          foundUser.emailVerificationExpiresAt &&
+          foundUser.emailVerificationExpiresAt > new Date()
+        ) {
+          user = foundUser;
+        }
+      }
+
+      if (!user) {
+        user = await usersRepository.findUserByVerificationTokenHash(tokenHash);
+      }
+    }
 
     if (!user) {
       throw new ValidationError('Invalid or expired email verification token');
@@ -99,6 +128,40 @@ export class AuthService {
 
     return {
       message: 'Email address verified successfully. You may now log in.',
+    };
+  }
+
+  /**
+   * Resend a fresh 6-digit verification OTP
+   */
+  async resendVerificationOtp(email: string) {
+    const emailNormalized = email.toLowerCase().trim();
+    const user = await usersRepository.findUserByEmailNormalized(emailNormalized);
+
+    if (!user) {
+      // Do not leak account existence
+      return { message: 'If an unverified account exists, a new 6-digit OTP has been sent.' };
+    }
+
+    if (user.emailVerifiedAt) {
+      return { message: 'Your email address is already verified. You can sign in immediately.' };
+    }
+
+    const newOtp = generateNumericOtp(6);
+    const verificationTokenHash = hashToken(newOtp);
+    const verificationExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    await usersRepository.updateUser(user._id.toHexString(), {
+      emailVerificationTokenHash: verificationTokenHash,
+      emailVerificationExpiresAt: verificationExpiresAt,
+    });
+
+    const profile = await usersRepository.findProfileByUserId(user._id.toHexString());
+    const emailProvider = getEmailProvider();
+    await emailProvider.sendVerificationEmail(user.email, newOtp, profile?.fullName);
+
+    return {
+      message: 'A new 6-digit verification OTP has been sent to your email.',
     };
   }
 
@@ -265,17 +328,17 @@ export class AuthService {
   }
 
   /**
-   * Initiate password reset
+   * Initiate password reset by dispatching a 6-digit reset OTP
    */
   async forgotPassword(email: string) {
     const emailNormalized = email.toLowerCase().trim();
     const user = await usersRepository.findUserByEmailNormalized(emailNormalized);
 
-    // If user exists, generate token and send email (never leak account existence to callers)
+    // If user exists, generate 6-digit OTP and send email (never leak account existence to callers)
     if (user && user.status === 'active') {
-      const rawResetToken = generateRandomToken(32);
-      const resetTokenHash = hashToken(rawResetToken);
-      const resetExpiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+      const rawResetOtp = generateNumericOtp(6);
+      const resetTokenHash = hashToken(rawResetOtp);
+      const resetExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
       await usersRepository.updateUser(user._id.toHexString(), {
         passwordResetTokenHash: resetTokenHash,
@@ -284,26 +347,63 @@ export class AuthService {
 
       const profile = await usersRepository.findProfileByUserId(user._id.toHexString());
       const emailProvider = getEmailProvider();
-      await emailProvider.sendPasswordResetEmail(user.email, rawResetToken, profile?.fullName);
+      await emailProvider.sendPasswordResetEmail(user.email, rawResetOtp, profile?.fullName);
     }
 
     return {
-      message: 'If an account exists with this email, password reset instructions have been sent.',
+      message: 'If an account exists with this email, a 6-digit password reset OTP has been sent.',
     };
   }
 
   /**
-   * Complete password reset
+   * Complete password reset with 6-digit OTP or legacy reset token
    */
-  async resetPassword(token: string, newPassword: string) {
-    const tokenHash = hashToken(token.trim());
-    const user = await usersRepository.findUserByPasswordResetTokenHash(tokenHash);
+  async resetPassword(
+    input: string | { token?: string; otp?: string; email?: string; password?: string },
+    newPassword?: string
+  ) {
+    let tokenHash: string;
+    let passwordToSet = '';
+    let user = null;
+
+    if (typeof input === 'string') {
+      tokenHash = hashToken(input.trim());
+      passwordToSet = newPassword || '';
+      user = await usersRepository.findUserByPasswordResetTokenHash(tokenHash);
+    } else {
+      const code = (input.otp || input.token || '').trim();
+      passwordToSet = input.password || newPassword || '';
+      if (!code) {
+        throw new ValidationError('Password reset code is required');
+      }
+      tokenHash = hashToken(code);
+
+      if (input.email) {
+        const foundUser = await usersRepository.findUserByEmailNormalized(input.email.toLowerCase().trim());
+        if (
+          foundUser &&
+          foundUser.passwordResetTokenHash === tokenHash &&
+          foundUser.passwordResetExpiresAt &&
+          foundUser.passwordResetExpiresAt > new Date()
+        ) {
+          user = foundUser;
+        }
+      }
+
+      if (!user) {
+        user = await usersRepository.findUserByPasswordResetTokenHash(tokenHash);
+      }
+    }
 
     if (!user) {
       throw new ValidationError('Invalid or expired password reset token');
     }
 
-    const passwordHash = await hashPassword(newPassword);
+    if (!passwordToSet || passwordToSet.length < 8) {
+      throw new ValidationError('New password must be at least 8 characters long');
+    }
+
+    const passwordHash = await hashPassword(passwordToSet);
 
     await usersRepository.updateUser(user._id.toHexString(), {
       passwordHash,

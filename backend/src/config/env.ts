@@ -42,6 +42,18 @@ const rawEnvSchema = z
     REDIS_URL: z.string().optional(),
     SOCKET_CORS_ORIGIN: z.string().optional(),
     GOOGLE_CLIENT_ID: z.string().optional(),
+    SMTP_HOST: z.string().optional(),
+    SMTP_PORT: z
+      .string()
+      .optional()
+      .transform((val) => (val ? parseInt(val, 10) : 587)),
+    SMTP_USER: z.string().optional(),
+    SMTP_PASS: z.string().optional(),
+    SMTP_FROM: z.string().optional(),
+    SMTP_SECURE: z
+      .string()
+      .optional()
+      .transform((val) => val === 'true' || val === '1'),
   })
   .superRefine((data, ctx) => {
     const isProd = data.NODE_ENV === 'production';
@@ -106,7 +118,7 @@ const rawEnvSchema = z
         data.JWT_REFRESH_SECRET && data.JWT_REFRESH_SECRET.trim().length > 0 ? data.JWT_REFRESH_SECRET : defaultJwtRefresh,
       JWT_ACCESS_EXPIRATION: data.JWT_ACCESS_EXPIRATION,
       JWT_REFRESH_EXPIRATION_DAYS: data.JWT_REFRESH_EXPIRATION_DAYS,
-      EMAIL_FROM: data.EMAIL_FROM,
+      EMAIL_FROM: data.SMTP_FROM || data.EMAIL_FROM,
       STORAGE_DRIVER: data.STORAGE_DRIVER,
       STORAGE_LOCAL_DIR: data.STORAGE_LOCAL_DIR,
       RATE_LIMIT_MAX: data.RATE_LIMIT_MAX,
@@ -120,6 +132,12 @@ const rawEnvSchema = z
       SOCKET_CORS_ORIGIN:
         data.SOCKET_CORS_ORIGIN && data.SOCKET_CORS_ORIGIN.trim().length > 0 ? data.SOCKET_CORS_ORIGIN : defaultCors,
       GOOGLE_CLIENT_ID: data.GOOGLE_CLIENT_ID,
+      SMTP_HOST: data.SMTP_HOST,
+      SMTP_PORT: data.SMTP_PORT,
+      SMTP_USER: data.SMTP_USER,
+      SMTP_PASS: data.SMTP_PASS,
+      SMTP_FROM: data.SMTP_FROM || data.EMAIL_FROM,
+      SMTP_SECURE: data.SMTP_SECURE,
     };
   });
 

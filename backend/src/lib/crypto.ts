@@ -45,3 +45,23 @@ export function hashToken(token: string): string {
 export function generateRandomToken(bytes = 32): string {
   return crypto.randomBytes(bytes).toString('hex');
 }
+
+/**
+ * Generate a cryptographically secure numeric OTP (e.g. 6-digit: 100000 to 999999)
+ */
+export function generateNumericOtp(digits = 6): string {
+  const min = Math.pow(10, digits - 1);
+  const max = Math.pow(10, digits) - 1;
+  return crypto.randomInt(min, max + 1).toString();
+}
+
+/**
+ * Constant-time comparison of two hex hashes to prevent timing attacks
+ */
+export function timingSafeEqualHex(a: string, b: string): boolean {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const bufA = Buffer.from(a, 'hex');
+  const bufB = Buffer.from(b, 'hex');
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}

@@ -84,22 +84,47 @@ describe('Authentication & Sessions Flow (Integration)', () => {
     expect(body.error.code).toBe('CONFLICT');
   });
 
-  it('should verify email address with valid token', async () => {
+  it('should verify email address with valid 6-digit OTP and email', async () => {
     const emailRecord = DevEmailProvider.lastSentEmails.find(
       (e) => e.to === 'rahul.sharma@kiet.edu' && e.type === 'VERIFICATION'
     );
-    const token = emailRecord!.token!;
+    const otp = emailRecord!.token!;
+    expect(otp).toMatch(/^\d{6}$/);
 
     const response = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/verify-email',
-      payload: { token },
+      payload: { email: 'rahul.sharma@kiet.edu', otp },
     });
 
     expect(response.statusCode).toBe(200);
     const body = JSON.parse(response.body);
     expect(body.success).toBe(true);
     expect(body.data.message).toContain('verified successfully');
+  });
+
+  it('should support resending a fresh 6-digit OTP', async () => {
+    // Register unverified student
+    await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      payload: {
+        email: 'priya.test@kiet.edu',
+        password: 'SecurePassword123!',
+        fullName: 'Priya Test',
+      },
+    });
+
+    const resendResponse = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/resend-otp',
+      payload: { email: 'priya.test@kiet.edu' },
+    });
+
+    expect(resendResponse.statusCode).toBe(200);
+    const body = JSON.parse(resendResponse.body);
+    expect(body.success).toBe(true);
+    expect(body.data.message).toContain('6-digit verification OTP');
   });
 
   it('should reject login with invalid password', async () => {
@@ -218,7 +243,8 @@ describe('Authentication & Sessions Flow (Integration)', () => {
       method: 'POST',
       url: '/api/v1/auth/reset-password',
       payload: {
-        token: resetEmail!.token!,
+        email: 'rahul.sharma@kiet.edu',
+        otp: resetEmail!.token!,
         password: 'NewStrongPassword456!',
       },
     });

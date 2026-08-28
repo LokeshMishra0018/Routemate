@@ -69,16 +69,16 @@ describe('Auth Feature Pages Test Suite', () => {
   });
 
   describe('VerifyEmailPage', () => {
-    it('renders verification token input and submit action', () => {
+    it('renders 6-digit OTP input and verify button', () => {
       render(
         <BrowserRouter>
           <VerifyEmailPage />
         </BrowserRouter>
       );
 
-      expect(screen.getByText('Verify Student Email')).toBeInTheDocument();
-      expect(screen.getByPlaceholderText(/Paste code \/ hex token here/i)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Verify Account/i })).toBeInTheDocument();
+      expect(screen.getByText('Verify College Email')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Verify & Activate Account/i })).toBeInTheDocument();
+      expect(screen.getByText(/Resend in/i)).toBeInTheDocument();
     });
   });
 
@@ -95,15 +95,16 @@ describe('Auth Feature Pages Test Suite', () => {
       expect(screen.getByRole('button', { name: /Send Recovery Email/i })).toBeInTheDocument();
     });
 
-    it('renders reset password form with new password input', () => {
+    it('renders reset password form with 6-digit OTP and new password inputs', () => {
       render(
         <BrowserRouter>
           <ResetPasswordPage />
         </BrowserRouter>
       );
 
-      expect(screen.getByText('Create New Password')).toBeInTheDocument();
-      expect(screen.getByPlaceholderText(/Paste code \/ token/i)).toBeInTheDocument();
+      expect(screen.getByText('Reset Password')).toBeInTheDocument();
+      expect(screen.getByText('6-Digit Reset Code')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('student@kiet.edu')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Update Password/i })).toBeInTheDocument();
     });
   });
