@@ -63,6 +63,10 @@ export class NodemailerEmailProvider implements EmailProvider {
 
   async verifyTransport(): Promise<boolean> {
     const env = getEnv();
+    if (env.GMAIL_CLIENT_ID && env.GMAIL_REFRESH_TOKEN) {
+      console.log('[EMAIL][INIT] ✅ Google Gmail REST API configured (HTTPS Port 443 - Cloud guaranteed).');
+      return true;
+    }
     if (env.RESEND_API_KEY) {
       console.log('[EMAIL][INIT] ✅ Resend HTTPS API configured (Port 443 - Cloud guaranteed).');
       return true;
@@ -212,7 +216,14 @@ export class NodemailerEmailProvider implements EmailProvider {
       </html>
     `;
 
-    // 1. Try HTTPS API Providers (Resend / Brevo) first (guaranteed on Render)
+    // 1. Try Google Gmail HTTPS REST API first (Guaranteed 100% on Render / Cloud)
+    if (env.GMAIL_CLIENT_ID && env.GMAIL_REFRESH_TOKEN) {
+      const { sendViaGmailRestApi } = await import('./gmail-api.service.js');
+      const sent = await sendViaGmailRestApi({ to, subject, html: htmlContent, text: textContent });
+      if (sent) return;
+    }
+
+    // 2. Try HTTPS API Providers (Resend / Brevo) (guaranteed on Render)
     if (env.RESEND_API_KEY) {
       const sent = await this.sendViaResend(to, subject, htmlContent, textContent);
       if (sent) return;
@@ -324,6 +335,12 @@ export class NodemailerEmailProvider implements EmailProvider {
       </body>
       </html>
     `;
+
+    if (env.GMAIL_CLIENT_ID && env.GMAIL_REFRESH_TOKEN) {
+      const { sendViaGmailRestApi } = await import('./gmail-api.service.js');
+      const sent = await sendViaGmailRestApi({ to, subject, html: htmlContent, text: textContent });
+      if (sent) return;
+    }
 
     if (env.RESEND_API_KEY) {
       const sent = await this.sendViaResend(to, subject, htmlContent, textContent);
