@@ -41,6 +41,7 @@ const rawEnvSchema = z
     RATE_LIMIT_ALLOW_LIST: z.string().optional().default(''),
     REDIS_URL: z.string().optional(),
     SOCKET_CORS_ORIGIN: z.string().optional(),
+    GOOGLE_CLIENT_ID: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     const isProd = data.NODE_ENV === 'production';
@@ -118,6 +119,7 @@ const rawEnvSchema = z
       REDIS_URL: data.REDIS_URL,
       SOCKET_CORS_ORIGIN:
         data.SOCKET_CORS_ORIGIN && data.SOCKET_CORS_ORIGIN.trim().length > 0 ? data.SOCKET_CORS_ORIGIN : defaultCors,
+      GOOGLE_CLIENT_ID: data.GOOGLE_CLIENT_ID,
     };
   });
 

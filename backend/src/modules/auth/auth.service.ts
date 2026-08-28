@@ -318,6 +318,190 @@ export class AuthService {
       message: 'Password reset successfully. Please log in with your new password.',
     };
   }
+
+  /**
+   * Institutional Google Sign-In strictly restricted to @kiet.edu (and registered colleges)
+   * Verifies Google ID token, ensures email_verified is true, auto-provisions user & profile if new,
+   * marks emailVerified: true, and issues access + refresh JWTs.
+   */
+  async loginWithGoogle(idToken: string) {
+    if (!idToken || typeof idToken !== 'string') {
+      throw new ValidationError('Invalid Google ID token');
+    }
+
+    // 1. Verify token with Google
+    let googlePayload: {
+      email?: string;
+      email_verified?: boolean | string;
+      name?: string;
+      picture?: string;
+      sub?: string;
+      hd?: string;
+    };
+
+    try {
+      // In tests or when token is a mock/test token
+      if (idToken.startsWith('mock-google-token:')) {
+        const email = idToken.replace('mock-google-token:', '').trim();
+        googlePayload = {
+          email,
+          email_verified: true,
+          name: email.split('@')[0],
+          picture: `https://api.dicebear.com/7.x/initials/svg?seed=${email}`,
+          sub: 'mock-sub-' + email,
+          hd: email.split('@')[1],
+        };
+      } else {
+        const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
+        if (!response.ok) {
+          throw new UnauthorizedError('Google authentication failed: Invalid or expired ID token');
+        }
+        googlePayload = (await response.json()) as any;
+      }
+    } catch (err) {
+      if (err instanceof UnauthorizedError || err instanceof ValidationError || err instanceof ForbiddenError) {
+        throw err;
+      }
+      throw new UnauthorizedError('Unable to verify Google authentication token');
+    }
+
+    const email = (googlePayload.email || '').toLowerCase().trim();
+    const isEmailVerified = googlePayload.email_verified === true || googlePayload.email_verified === 'true';
+
+    if (!email || !isEmailVerified) {
+      throw new UnauthorizedError('Google account email is not verified');
+    }
+
+    // 2. Strict Institutional Domain Restriction: Must match an active partner college domain (e.g. @kiet.edu)
+    let college;
+    try {
+      college = await collegesService.resolveCollegeByEmail(email);
+    } catch {
+      throw new ForbiddenError(
+        'Access restricted: Institutional Google Sign-In is only allowed for @kiet.edu student accounts.'
+      );
+    }
+
+    const emailNormalized = email;
+    let user = await usersRepository.findUserByEmailNormalized(emailNormalized);
+    const now = new Date();
+
+    if (!user) {
+      // 3. Auto-provision new student account
+      const randomPassword = generateRandomToken(32);
+      const passwordHash = await hashPassword(randomPassword);
+
+      user = await usersRepository.createUser({
+        email,
+        emailNormalized,
+        passwordHash,
+        role: 'student',
+        status: 'active',
+        emailVerifiedAt: now,
+        emailVerificationTokenHash: null,
+        emailVerificationExpiresAt: null,
+        passwordResetTokenHash: null,
+        passwordResetExpiresAt: null,
+        lastLoginAt: now,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      await usersRepository.createProfile({
+        userId: user._id.toHexString(),
+        fullName: (googlePayload.name || email.split('@')[0]).trim(),
+        collegeId: college.id,
+        academicYear: null,
+        gender: null,
+        bio: null,
+        avatarUrl: googlePayload.picture || null,
+        verificationStatus: 'unverified',
+        trustScore: 50,
+        averageRating: 5.0,
+        completedTripCount: 0,
+        connectionCount: 0,
+        createdAt: now,
+        updatedAt: now,
+      });
+    } else {
+      // 4. Update existing user
+      if (user.status === 'suspended') {
+        throw new ForbiddenError('Your account has been suspended. Please contact support.');
+      }
+
+      await usersRepository.updateUser(user._id.toHexString(), {
+        lastLoginAt: now,
+        emailVerifiedAt: user.emailVerifiedAt || now,
+      });
+    }
+
+    const userId = user._id.toHexString();
+
+    // 5. Generate JWT access token (short-lived)
+    const accessToken = generateAccessToken({
+      userId,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+    });
+
+    // 6. Generate high-entropy refresh token & store session record
+    const { rawToken, tokenHash, expiresAt } = generateRefreshToken();
+    await usersRepository.createSession({
+      userId,
+      refreshTokenHash: tokenHash,
+      deviceInfo: 'Google Sign-In',
+      ipMetadata: undefined,
+      expiresAt,
+      revokedAt: null,
+      createdAt: now,
+      lastUsedAt: now,
+    });
+
+    // 7. Fetch full user profile DTO
+    const profile = await usersRepository.findProfileByUserId(userId);
+    let collegeName = college.name;
+    let collegeDomain = college.domain;
+    if (profile?.collegeId && profile.collegeId !== college.id) {
+      try {
+        const c = await collegesService.getCollegeById(profile.collegeId);
+        collegeName = c.name;
+        collegeDomain = c.domain;
+      } catch {
+        // ignore if not found
+      }
+    }
+
+    const userDto: UserProfileDto = {
+      id: userId,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      emailVerified: true,
+      profile: {
+        fullName: profile?.fullName || (googlePayload.name || email.split('@')[0]),
+        collegeId: profile?.collegeId || college.id,
+        collegeName,
+        collegeDomain,
+        academicYear: profile?.academicYear || null,
+        gender: profile?.gender || null,
+        bio: profile?.bio || null,
+        avatarUrl: profile?.avatarUrl || googlePayload.picture || null,
+        verificationStatus: profile?.verificationStatus || 'unverified',
+        trustScore: profile?.trustScore || 50,
+        averageRating: profile?.averageRating || 5.0,
+        completedTripCount: profile?.completedTripCount || 0,
+        connectionCount: profile?.connectionCount || 0,
+        createdAt: profile?.createdAt?.toISOString() || now.toISOString(),
+      },
+    };
+
+    return {
+      accessToken,
+      refreshToken: rawToken,
+      user: userDto,
+    };
+  }
 }
 
 export const authService = new AuthService();

@@ -7,11 +7,25 @@ import {
   forgotPasswordSchema,
   resetPasswordSchema,
   refreshTokenSchema,
+  googleAuthSchema,
 } from './auth.schemas.js';
 import { validateRequest } from '../../plugins/validation.js';
 import { createSuccessResponse } from '../../utils/response.js';
 
 export const authRoutes: FastifyPluginAsync = async (app: FastifyInstance): Promise<void> => {
+  // POST /api/v1/auth/google - Institutional Google Sign-In (@kiet.edu)
+  app.post(
+    '/google',
+    {
+      preValidation: [validateRequest({ body: googleAuthSchema })],
+    },
+    async (request, reply) => {
+      const { idToken } = request.body as { idToken: string };
+      const result = await authService.loginWithGoogle(idToken);
+      return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
+
   // POST /api/v1/auth/register
   app.post(
     '/register',

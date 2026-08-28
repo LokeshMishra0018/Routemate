@@ -7,6 +7,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../../components/ui/Card';
+import { GoogleSignInButton } from '../../components/auth/GoogleSignInButton';
 import { College } from '../../types';
 
 export const RegisterPage: React.FC = () => {
@@ -99,13 +100,24 @@ export const RegisterPage: React.FC = () => {
         <CardDescription>Safe, verified campus rides and travel companions</CardDescription>
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="space-y-4">
         {error && (
-          <div className="mb-4 p-3 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-300 text-xs flex items-center gap-2">
+          <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-300 text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
         )}
+
+        {/* 1-Click Institutional Google Registration */}
+        <GoogleSignInButton mode="signup" onError={(msg) => setError(msg)} />
+
+        <div className="relative flex items-center justify-center my-3">
+          <div className="border-t border-slate-800 w-full"></div>
+          <span className="bg-slate-900 px-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider shrink-0">
+            or sign up with email
+          </span>
+          <div className="border-t border-slate-800 w-full"></div>
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-3.5">
           <Input

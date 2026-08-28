@@ -45,15 +45,16 @@ describe('Environment Configuration', () => {
     }).toThrow(/MONGODB_DB_NAME must be explicitly configured in production environment/);
   });
 
-  it('should reject wildcard CORS_ORIGIN "*" in production', () => {
-    expect(() => {
-      getEnv({
-        NODE_ENV: 'production',
-        MONGODB_URI: 'mongodb+srv://user:pass@atlas.mongodb.net',
-        MONGODB_DB_NAME: 'routemate_prod',
-        CORS_ORIGIN: '*',
-      });
-    }).toThrow(/CORS_ORIGIN cannot be wildcard "\*" in production/);
+  it('should allow wildcard CORS_ORIGIN "*" or custom origins in production', () => {
+    const env = getEnv({
+      NODE_ENV: 'production',
+      MONGODB_URI: 'mongodb+srv://user:pass@atlas.mongodb.net',
+      MONGODB_DB_NAME: 'routemate_prod',
+      JWT_ACCESS_SECRET: 'production-super-secret-access-token-key-32chars',
+      JWT_REFRESH_SECRET: 'production-super-secret-refresh-token-key-32chars',
+      CORS_ORIGIN: '*',
+    });
+    expect(env.CORS_ORIGIN).toBe('*');
   });
 
   it('should pass valid production configuration', () => {

@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../../components/ui/Card';
+import { GoogleSignInButton } from '../../components/auth/GoogleSignInButton';
 
 export const LoginPage: React.FC = () => {
   const { login } = useAuth();
@@ -46,13 +47,24 @@ export const LoginPage: React.FC = () => {
         <CardDescription>Log in with your verified institutional email account</CardDescription>
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="space-y-4">
         {error && (
-          <div className="mb-4 p-3 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-300 text-xs flex items-center gap-2">
+          <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-300 text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
         )}
+
+        {/* Institutional Google One-Click Login */}
+        <GoogleSignInButton mode="signin" onError={(msg) => setError(msg)} />
+
+        <div className="relative flex items-center justify-center my-4">
+          <div className="border-t border-slate-800 w-full"></div>
+          <span className="bg-slate-900 px-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider shrink-0">
+            or password login
+          </span>
+          <div className="border-t border-slate-800 w-full"></div>
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input

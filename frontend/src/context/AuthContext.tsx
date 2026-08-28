@@ -8,6 +8,7 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<User>;
+  loginWithGoogle: (idToken: string) => Promise<User>;
   register: (data: { email: string; password: string; fullName: string; collegeId?: string }) => Promise<{ userId: string }>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -80,6 +81,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const loginWithGoogle = async (idToken: string) => {
+    setIsLoading(true);
+    try {
+      const res = await apiClient.post('/auth/google', { idToken });
+      const { accessToken, user: loggedUser, profile: userProfile } = res.data.data;
+      setAuthToken(accessToken);
+      const userObj = {
+        id: loggedUser.id,
+        email: loggedUser.email,
+        role: loggedUser.role,
+        status: loggedUser.status,
+        emailVerified: loggedUser.emailVerified,
+        fullName: loggedUser.profile?.fullName,
+        avatarUrl: loggedUser.profile?.avatarUrl,
+        collegeId: loggedUser.profile?.collegeId,
+        collegeName: loggedUser.profile?.college?.name,
+        trustScore: loggedUser.profile?.trustScore,
+        verificationStatus: loggedUser.profile?.verificationStatus,
+      };
+      setUser(userObj as any);
+      setProfile(userProfile || loggedUser.profile || null);
+      return loggedUser;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const register = async (data: { email: string; password: string; fullName: string; collegeId?: string }) => {
     const res = await apiClient.post('/auth/register', data);
     return res.data.data;
@@ -113,6 +141,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         isAuthenticated: !!user,
         login,
+        loginWithGoogle,
         register,
         logout,
         refreshProfile,
