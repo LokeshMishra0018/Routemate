@@ -19,6 +19,7 @@ import { Trip, Connection } from '../types';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
+import { TrustBadge } from '../components/common/TrustBadge';
 import { TrustScoreMeter } from '../components/ui/TrustScoreMeter';
 import { EmptyState, ErrorState, LoadingSpinner } from '../components/ui/EmptyState';
 import { formatTime } from '../lib/utils';
@@ -50,7 +51,7 @@ export const DashboardPage: React.FC = () => {
   });
 
   const pendingRequestsCount = connectionsData?.length || 0;
-  const isUnverified = profile?.verificationStatus !== 'approved';
+  const isUnverified = user?.role !== 'admin' && user?.role !== 'moderator' && profile?.verificationStatus !== 'approved';
 
   return (
     <div className="space-y-6">
@@ -58,18 +59,25 @@ export const DashboardPage: React.FC = () => {
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-indigo-950/80 via-slate-900 to-indigo-900/50 border border-indigo-500/20 p-6 sm:p-8 shadow-2xl backdrop-blur-xl">
         <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="space-y-2">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-bold uppercase tracking-wider text-indigo-400 bg-indigo-950/85 px-2.5 py-1 rounded-full border border-indigo-500/30">
                 {profile?.collegeName || 'KIET Campus Network'}
               </span>
-              {profile?.verificationStatus === 'approved' && (
-                <Badge variant="success" size="sm">
-                  Verified Student
-                </Badge>
-              )}
+              <TrustBadge
+                role={user?.role}
+                tier={profile?.verificationTier || (profile?.verificationStatus === 'approved' ? 'fully_verified' : 'partially_verified')}
+                size="sm"
+              />
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-              Hello, {profile?.fullName || user?.email?.split('@')[0]} 👋
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-2">
+              <span>Hello, {profile?.fullName || user?.email?.split('@')[0]}</span>
+              <TrustBadge
+                role={user?.role}
+                tier={profile?.verificationTier || (profile?.verificationStatus === 'approved' ? 'fully_verified' : 'partially_verified')}
+                iconOnly
+                size="md"
+              />
+              <span>👋</span>
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-xl leading-relaxed">
               Find compatible college commuters, split travel costs safely, and travel together with verified students.

@@ -135,7 +135,9 @@ export const Navbar: React.FC = () => {
               <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-slate-900 border border-slate-700 p-2 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150">
                 <div className="p-3 border-b border-slate-800">
                   <div className="flex items-center justify-between gap-1">
-                    <p className="text-xs font-bold text-slate-100 truncate">{profile?.fullName || 'Student'}</p>
+                    <p className="text-xs font-bold text-slate-100 truncate">
+                      {profile?.fullName || (user?.role === 'admin' ? 'Campus Admin' : user?.role === 'moderator' ? 'Campus Moderator' : 'Student')}
+                    </p>
                     <TrustBadge
                       role={user?.role}
                       tier={profile?.verificationTier || (profile?.verificationStatus === 'approved' ? 'fully_verified' : 'partially_verified')}
