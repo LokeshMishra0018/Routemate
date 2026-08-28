@@ -51,14 +51,16 @@ const AuthenticatedDocumentViewer: React.FC<{
     try {
       setLoading(true);
       setError(null);
-      const res = await apiClient.get(documentUrl, { responseType: 'blob' });
+      const endpoint = documentUrl.startsWith('/api/v1') ? documentUrl.substring(7) : documentUrl;
+      const res = await apiClient.get(endpoint, { responseType: 'blob' });
       const headerMime = typeof res.headers['content-type'] === 'string' ? res.headers['content-type'] : undefined;
       const mime = headerMime || documentMimeType || 'image/jpeg';
       const blob = new Blob([res.data], { type: mime });
       const url = URL.createObjectURL(blob);
       setBlobUrl(url);
     } catch (err: unknown) {
-      setError('Could not load document from server.');
+      const msg = err instanceof Error ? err.message : 'Could not load document from server.';
+      setError(msg);
     } finally {
       setLoading(false);
     }

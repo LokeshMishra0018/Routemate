@@ -59,7 +59,7 @@ export class AdminService {
           collegeId: doc.collegeId,
           documentMimeType: doc.documentMimeType,
           documentSize: doc.documentSize,
-          documentUrl: `/api/v1/admin/verifications/${doc._id.toHexString()}/document`,
+          documentUrl: `/admin/verifications/${doc._id.toHexString()}/document`,
           status: doc.status,
           createdAt: doc.createdAt.toISOString(),
           user: userDto,
