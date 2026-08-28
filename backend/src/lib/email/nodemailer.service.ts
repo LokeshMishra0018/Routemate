@@ -14,16 +14,34 @@ export class NodemailerEmailProvider implements EmailProvider {
     if (env.NODE_ENV === 'test') {
       return null;
     }
-    if (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS) {
-      this.transporter = nodemailer.createTransport({
-        host: env.SMTP_HOST,
-        port: env.SMTP_PORT,
-        secure: env.SMTP_SECURE || env.SMTP_PORT === 465,
-        auth: {
-          user: env.SMTP_USER,
-          pass: env.SMTP_PASS,
-        },
-      });
+
+    if (env.SMTP_USER && env.SMTP_PASS) {
+      const isGmail = env.SMTP_HOST === 'smtp.gmail.com' || !env.SMTP_HOST;
+      this.transporter = nodemailer.createTransport(
+        isGmail
+          ? {
+              service: 'gmail',
+              auth: {
+                user: env.SMTP_USER,
+                pass: env.SMTP_PASS,
+              },
+              connectionTimeout: 8000,
+              greetingTimeout: 8000,
+              socketTimeout: 10000,
+            }
+          : {
+              host: env.SMTP_HOST,
+              port: env.SMTP_PORT || 587,
+              secure: env.SMTP_SECURE ?? env.SMTP_PORT === 465,
+              auth: {
+                user: env.SMTP_USER,
+                pass: env.SMTP_PASS,
+              },
+              connectionTimeout: 8000,
+              greetingTimeout: 8000,
+              socketTimeout: 10000,
+            }
+      );
     }
     return this.transporter;
   }

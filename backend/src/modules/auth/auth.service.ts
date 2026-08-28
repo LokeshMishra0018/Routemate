@@ -49,7 +49,9 @@ export class AuthService {
       }
 
       const emailProvider = getEmailProvider();
-      await emailProvider.sendVerificationEmail(input.email, rawOtp, input.fullName.trim());
+      emailProvider.sendVerificationEmail(input.email, rawOtp, input.fullName.trim()).catch((err) => {
+        console.error('[EMAIL][ERROR] Failed to send verification email:', err);
+      });
 
       return {
         userId: existing._id.toHexString(),
@@ -110,9 +112,11 @@ export class AuthService {
       updatedAt: now,
     });
 
-    // 7. Send verification OTP email via provider
+    // 7. Send verification OTP email via provider asynchronously
     const emailProvider = getEmailProvider();
-    await emailProvider.sendVerificationEmail(input.email, rawOtp, input.fullName);
+    emailProvider.sendVerificationEmail(input.email, rawOtp, input.fullName).catch((err) => {
+      console.error('[EMAIL][ERROR] Failed to send verification email:', err);
+    });
 
     return {
       userId: user._id.toHexString(),
@@ -199,7 +203,9 @@ export class AuthService {
 
     const profile = await usersRepository.findProfileByUserId(user._id.toHexString());
     const emailProvider = getEmailProvider();
-    await emailProvider.sendVerificationEmail(user.email, newOtp, profile?.fullName);
+    emailProvider.sendVerificationEmail(user.email, newOtp, profile?.fullName).catch((err) => {
+      console.error('[EMAIL][ERROR] Failed to send resend-verification email:', err);
+    });
 
     return {
       message: 'A new 6-digit verification OTP has been sent to your email.',
@@ -395,7 +401,9 @@ export class AuthService {
 
       const profile = await usersRepository.findProfileByUserId(user._id.toHexString());
       const emailProvider = getEmailProvider();
-      await emailProvider.sendPasswordResetEmail(user.email, rawResetOtp, profile?.fullName);
+      emailProvider.sendPasswordResetEmail(user.email, rawResetOtp, profile?.fullName).catch((err) => {
+        console.error('[EMAIL][ERROR] Failed to send password-reset email:', err);
+      });
     }
 
     return {
