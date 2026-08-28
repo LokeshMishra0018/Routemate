@@ -61,3 +61,10 @@ export class RateLimitError extends AppError {
     this.name = 'RateLimitError';
   }
 }
+
+export class ServiceUnavailableError extends AppError {
+  constructor(message = 'Service temporarily unavailable. Please try again shortly.', details?: unknown) {
+    super(message, 503, 'SERVICE_UNAVAILABLE', details);
+    this.name = 'ServiceUnavailableError';
+  }
+}

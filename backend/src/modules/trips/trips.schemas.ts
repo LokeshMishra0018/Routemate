@@ -1,22 +1,25 @@
 import { z } from 'zod';
 
-export const geoPointSchema = z.object({
-  type: z.literal('Point').default('Point'),
-  coordinates: z
-    .tuple([
-      z.number().min(-180, 'Longitude must be >= -180').max(180, 'Longitude must be <= 180'),
-      z.number().min(-90, 'Latitude must be >= -90').max(90, 'Latitude must be <= 90'),
-    ]),
-});
+export const geoPointSchema = z
+  .object({
+    type: z.literal('Point').default('Point'),
+    coordinates: z
+      .tuple([
+        z.number().min(-180, 'Longitude must be >= -180').max(180, 'Longitude must be <= 180'),
+        z.number().min(-90, 'Latitude must be >= -90').max(90, 'Latitude must be <= 90'),
+      ])
+      .default([77.4977, 28.7532]),
+  })
+  .default({ type: 'Point', coordinates: [77.4977, 28.7532] });
 
 export const locationPointSchema = z.object({
   name: z.string().min(1, 'Location name is required').max(150).trim(),
-  coordinates: geoPointSchema,
+  coordinates: geoPointSchema.optional().default({ type: 'Point', coordinates: [77.4977, 28.7532] }),
 });
 
 const tripStopSchema = z.object({
   name: z.string().min(1, 'Stop name is required').max(150).trim(),
-  coordinates: geoPointSchema,
+  coordinates: geoPointSchema.optional().default({ type: 'Point', coordinates: [77.4977, 28.7532] }),
   sequenceNumber: z.number().int().min(1),
   estimatedArrivalTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Invalid time format HH:MM').nullable().optional(),
 });

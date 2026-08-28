@@ -30,6 +30,19 @@ export const matchingRoutes: FastifyPluginAsync = async (app: FastifyInstance): 
     }
   );
 
+  // GET /trips/:tripId/matches & /:tripId/matches - Fetch matches for trip
+  app.get('/trips/:tripId/matches', async (request, reply) => {
+    const { tripId } = request.params as { tripId: string };
+    const result = await matchingService.getMatchesForTrip(request.user!.id, tripId);
+    return reply.status(200).send(createSuccessResponse(result.items));
+  });
+
+  app.get('/:tripId/matches', async (request, reply) => {
+    const { tripId } = request.params as { tripId: string };
+    const result = await matchingService.getMatchesForTrip(request.user!.id, tripId);
+    return reply.status(200).send(createSuccessResponse(result.items));
+  });
+
   // POST /api/v1/matches/generate/:tripId - Trigger on-demand match generation
   app.post('/generate/:tripId', async (request, reply) => {
     const { tripId } = request.params as { tripId: string };

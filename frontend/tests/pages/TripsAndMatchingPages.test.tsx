@@ -177,7 +177,7 @@ describe('Trips & Matching Feature Tests', () => {
   describe('MatchesExplorerPage', () => {
     it('displays 6-factor score percentage and reasons highlights', async () => {
       (apiClient.get as any).mockImplementation((url: string) => {
-        if (url === '/trips') {
+        if (url.startsWith('/trips')) {
           return Promise.resolve({
             data: {
               data: [

@@ -5,6 +5,9 @@ let client: MongoClient | null = null;
 let db: Db | null = null;
 let isConnected = false;
 
+let isConnecting = false;
+let autoReconnectTimer: NodeJS.Timeout | null = null;
+
 export interface MongoHealthStatus {
   connected: boolean;
   databaseName?: string;
@@ -17,13 +20,24 @@ export function sanitizeMongoError(message: string): string {
 }
 
 /**
- * Connect to MongoDB Atlas / Local MongoDB instance
+ * Connect to MongoDB Atlas / Local MongoDB instance with auto-retry and pooling
  */
 export async function connectMongo(customUri?: string, customDbName?: string): Promise<{ client: MongoClient; db: Db }> {
   if (client && db && isConnected) {
     return { client, db };
   }
 
+  if (isConnecting) {
+    // Wait for in-flight connection attempt
+    while (isConnecting) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    if (client && db && isConnected) {
+      return { client, db };
+    }
+  }
+
+  isConnecting = true;
   const env = getEnv();
   const uri = customUri || env.MONGODB_URI;
   const dbName = customDbName || env.MONGODB_DB_NAME;
@@ -31,22 +45,47 @@ export async function connectMongo(customUri?: string, customDbName?: string): P
   const options: MongoClientOptions = {
     maxPoolSize: 50,
     minPoolSize: 5,
-    serverSelectionTimeoutMS: 5000,
-    connectTimeoutMS: 10000,
+    serverSelectionTimeoutMS: 10000,
+    connectTimeoutMS: 15000,
+    retryWrites: true,
+    retryReads: true,
   };
 
   try {
+    if (client) {
+      try {
+        await client.close();
+      } catch {
+        // ignore close errors during reset
+      }
+      client = null;
+      db = null;
+      isConnected = false;
+    }
+
     client = new MongoClient(uri, options);
     await client.connect();
     db = client.db(dbName);
     isConnected = true;
 
+    if (autoReconnectTimer) {
+      clearTimeout(autoReconnectTimer);
+      autoReconnectTimer = null;
+    }
+
     client.on('connectionClosed', () => {
       isConnected = false;
+      scheduleAutoReconnect();
     });
 
     client.on('close', () => {
       isConnected = false;
+      scheduleAutoReconnect();
+    });
+
+    client.on('error', () => {
+      isConnected = false;
+      scheduleAutoReconnect();
     });
 
     return { client, db };
@@ -57,28 +96,57 @@ export async function connectMongo(customUri?: string, customDbName?: string): P
     const sanitizedMsg = sanitizeMongoError(error instanceof Error ? error.message : String(error));
     const safeError = new Error(sanitizedMsg);
     throw safeError;
+  } finally {
+    isConnecting = false;
   }
 }
 
+function scheduleAutoReconnect(): void {
+  if (autoReconnectTimer || isConnecting) {
+    return;
+  }
+  autoReconnectTimer = setTimeout(async () => {
+    autoReconnectTimer = null;
+    try {
+      await connectMongo();
+    } catch {
+      scheduleAutoReconnect();
+    }
+  }, 5000);
+  if (autoReconnectTimer.unref) {
+    autoReconnectTimer.unref();
+  }
+}
+
+import { ServiceUnavailableError } from '../utils/errors.js';
+
 /**
  * Returns the active MongoDB database instance.
- * Throws if database is not connected.
+ * Recovers or throws ServiceUnavailableError if database is not connected.
  */
 export function getDb(): Db {
-  if (!db || !isConnected) {
-    throw new Error('Database is not connected. Ensure connectMongo() is called first.');
+  if (db && isConnected) {
+    return db;
   }
-  return db;
+  if (client) {
+    const env = getEnv();
+    db = client.db(env.MONGODB_DB_NAME);
+    isConnected = true;
+    return db;
+  }
+  scheduleAutoReconnect();
+  throw new ServiceUnavailableError('Database service is currently connecting to MongoDB Atlas. Please try again shortly.');
 }
 
 /**
  * Returns the active MongoClient instance.
  */
 export function getMongoClient(): MongoClient {
-  if (!client || !isConnected) {
-    throw new Error('MongoClient is not connected. Ensure connectMongo() is called first.');
+  if (client && isConnected) {
+    return client;
   }
-  return client;
+  scheduleAutoReconnect();
+  throw new ServiceUnavailableError('MongoClient is currently connecting to MongoDB Atlas. Please try again shortly.');
 }
 
 /**

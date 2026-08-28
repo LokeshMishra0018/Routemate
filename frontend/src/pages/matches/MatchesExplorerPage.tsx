@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -39,12 +39,19 @@ export const MatchesExplorerPage: React.FC = () => {
   const { data: myTrips, isLoading: myTripsLoading } = useQuery({
     queryKey: ['my-trips-for-matching'],
     queryFn: async () => {
-      const res = await apiClient.get('/trips');
+      const res = await apiClient.get('/trips/me');
       return res.data.data as Trip[];
     },
   });
 
-  const selectedTripId = activeTripId || (myTrips && myTrips.length > 0 ? myTrips[0].id : '');
+  const selectedTrip = myTrips?.find((t) => t.id === activeTripId) || (myTrips && myTrips.length > 0 ? myTrips[0] : null);
+  const selectedTripId = selectedTrip?.id || '';
+
+  useEffect(() => {
+    if (myTrips && myTrips.length > 0 && selectedTripId && activeTripId !== selectedTripId) {
+      setSearchParams({ tripId: selectedTripId }, { replace: true });
+    }
+  }, [myTrips, selectedTripId, activeTripId, setSearchParams]);
 
   // 2. Fetch matches for selected trip
   const {
@@ -137,14 +144,16 @@ export const MatchesExplorerPage: React.FC = () => {
       {/* Match Cards List */}
       {selectedTripId && !matchesLoading && !matchesError && matches && matches.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {matches.map((m, idx) => {
-            const matchedTrip = m.matchedTrip;
-            const companion = matchedTrip.user;
+          {matches.map((m: any, idx) => {
+            const matchedTrip = m.matchedTrip || m.candidateTrip || {};
+            const companion = (matchedTrip && matchedTrip.user) ? matchedTrip.user : (m.candidateUser || {});
+            const score = m.matchScore ?? m.score ?? 0;
+            const reasonsList = m.reasons || m.explanation || [];
 
             // Percentage color logic
             let scoreColor = 'text-emerald-400 border-emerald-500/40 bg-emerald-950/60 shadow-glow-trust';
-            if (m.matchScore < 60) scoreColor = 'text-amber-400 border-amber-500/40 bg-amber-950/60';
-            else if (m.matchScore < 80) scoreColor = 'text-indigo-400 border-indigo-500/40 bg-indigo-950/60 shadow-glow';
+            if (score < 60) scoreColor = 'text-amber-400 border-amber-500/40 bg-amber-950/60';
+            else if (score < 80) scoreColor = 'text-indigo-400 border-indigo-500/40 bg-indigo-950/60 shadow-glow';
 
             return (
               <Card key={idx} hoverEffect className="glass-card flex flex-col justify-between p-5 space-y-4">
@@ -173,7 +182,7 @@ export const MatchesExplorerPage: React.FC = () => {
 
                     {/* Match Score Display */}
                     <div className={`px-3 py-1.5 rounded-xl border text-center font-black text-sm shrink-0 ${scoreColor}`}>
-                      {m.matchScore}%
+                      {score}%
                       <span className="block text-[9px] font-semibold tracking-wider uppercase opacity-80">Match</span>
                     </div>
                   </div>
@@ -182,28 +191,28 @@ export const MatchesExplorerPage: React.FC = () => {
                   <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1.5 text-xs">
                     <div className="flex items-center gap-2 text-slate-200">
                       <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                      <span className="truncate">{matchedTrip.source.name}</span>
+                      <span className="truncate">{matchedTrip?.source?.name || 'Start'}</span>
                     </div>
                     <div className="flex items-center gap-2 text-slate-200">
                       <MapPin className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                      <span className="truncate">{matchedTrip.destination.name}</span>
+                      <span className="truncate">{matchedTrip?.destination?.name || 'End'}</span>
                     </div>
                     <div className="flex items-center justify-between pt-1 border-t border-slate-800 text-slate-400">
                       <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" /> {formatTime(matchedTrip.departureTime)}
+                        <Clock className="w-3 h-3" /> {formatTime(matchedTrip?.departureTime)}
                       </span>
-                      <span className="capitalize">{matchedTrip.transportType}</span>
+                      <span className="capitalize">{matchedTrip?.transportType || 'Transit'}</span>
                     </div>
                   </div>
 
                   {/* Reasons pills */}
-                  {m.reasons && m.reasons.length > 0 && (
+                  {reasonsList && reasonsList.length > 0 && (
                     <div className="space-y-1">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
                         Compatibility Highlights:
                       </span>
                       <div className="flex flex-wrap gap-1.5">
-                        {m.reasons.map((reason, rIdx) => (
+                        {reasonsList.map((reason: string, rIdx: number) => (
                           <span
                             key={rIdx}
                             className="inline-flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700"
@@ -240,8 +249,8 @@ export const MatchesExplorerPage: React.FC = () => {
                     leftIcon={<Send className="w-3.5 h-3.5" />}
                     onClick={() =>
                       setConnectionRecipient({
-                        tripId: matchedTrip.id,
-                        userId: matchedTrip.userId,
+                        tripId: matchedTrip?.id || m.candidateTripId,
+                        userId: matchedTrip?.userId || m.candidateUserId,
                         name: companion?.fullName || 'Student',
                       })
                     }
@@ -266,42 +275,46 @@ export const MatchesExplorerPage: React.FC = () => {
           <div className="space-y-4 pt-2">
             <div className="flex items-center justify-between p-4 rounded-xl bg-slate-900 border border-slate-800">
               <span className="text-sm font-bold text-slate-200">Overall Match Score</span>
-              <span className="text-xl font-black text-indigo-400">{selectedMatchForBreakdown.matchScore}%</span>
+              <span className="text-xl font-black text-indigo-400">
+                {selectedMatchForBreakdown.matchScore ?? (selectedMatchForBreakdown as any).score ?? 0}%
+              </span>
             </div>
 
             <div className="space-y-2 text-xs">
               <div className="flex justify-between p-2 rounded-lg bg-slate-900/60 border border-slate-800">
                 <span className="text-slate-300">1. Route & Spatial Overlap (35% weight)</span>
                 <span className="font-bold text-emerald-400">
-                  {selectedMatchForBreakdown.scoreBreakdown.routeOverlapScore}%
+                  {selectedMatchForBreakdown.scoreBreakdown?.routeOverlapScore ?? Math.round(((selectedMatchForBreakdown as any).routeScore || 0) * 100)}%
                 </span>
               </div>
               <div className="flex justify-between p-2 rounded-lg bg-slate-900/60 border border-slate-800">
                 <span className="text-slate-300">2. Departure Time Proximity (20% weight)</span>
                 <span className="font-bold text-indigo-400">
-                  {selectedMatchForBreakdown.scoreBreakdown.timeScore}%
+                  {selectedMatchForBreakdown.scoreBreakdown?.timeScore ?? Math.round(((selectedMatchForBreakdown as any).timeScore || 0) * 100)}%
                 </span>
               </div>
               <div className="flex justify-between p-2 rounded-lg bg-slate-900/60 border border-slate-800">
                 <span className="text-slate-300">3. Travel Date Exactness (15% weight)</span>
-                <span className="font-bold text-slate-200">{selectedMatchForBreakdown.scoreBreakdown.dateScore}%</span>
+                <span className="font-bold text-slate-200">
+                  {selectedMatchForBreakdown.scoreBreakdown?.dateScore ?? Math.round(((selectedMatchForBreakdown as any).dateScore || 0) * 100)}%
+                </span>
               </div>
               <div className="flex justify-between p-2 rounded-lg bg-slate-900/60 border border-slate-800">
                 <span className="text-slate-300">4. Transit Mode Compatibility (10% weight)</span>
                 <span className="font-bold text-slate-200">
-                  {selectedMatchForBreakdown.scoreBreakdown.transportScore}%
+                  {selectedMatchForBreakdown.scoreBreakdown?.transportScore ?? Math.round(((selectedMatchForBreakdown as any).transportScore || 0) * 100)}%
                 </span>
               </div>
               <div className="flex justify-between p-2 rounded-lg bg-slate-900/60 border border-slate-800">
                 <span className="text-slate-300">5. Personal Preferences (10% weight)</span>
                 <span className="font-bold text-slate-200">
-                  {selectedMatchForBreakdown.scoreBreakdown.preferenceScore}%
+                  {selectedMatchForBreakdown.scoreBreakdown?.preferenceScore ?? Math.round(((selectedMatchForBreakdown as any).preferenceScore || 0) * 100)}%
                 </span>
               </div>
               <div className="flex justify-between p-2 rounded-lg bg-slate-900/60 border border-slate-800">
                 <span className="text-slate-300">6. Student Trust & Verification (10% weight)</span>
                 <span className="font-bold text-emerald-400">
-                  {selectedMatchForBreakdown.scoreBreakdown.verificationScore}%
+                  {selectedMatchForBreakdown.scoreBreakdown?.verificationScore ?? 50}%
                 </span>
               </div>
             </div>

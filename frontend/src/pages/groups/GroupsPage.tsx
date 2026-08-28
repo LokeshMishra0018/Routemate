@@ -49,7 +49,7 @@ export const GroupsPage: React.FC = () => {
   const { data: myTrips } = useQuery({
     queryKey: ['my-trips-for-group'],
     queryFn: async () => {
-      const res = await apiClient.get('/trips');
+      const res = await apiClient.get('/trips/me');
       return res.data.data as Trip[];
     },
     enabled: isCreateOpen,

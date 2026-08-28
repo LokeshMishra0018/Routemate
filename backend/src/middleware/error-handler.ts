@@ -80,10 +80,16 @@ export function errorHandler(
   }
 
   // Production safe fallback for unexpected 500 Internal Server Errors
+  const isDev = process.env.NODE_ENV === 'development';
+  const errorMessage =
+    isDev && 'message' in error && typeof error.message === 'string' && error.message.trim().length > 0
+      ? error.message
+      : 'An unexpected internal server error occurred';
+
   reply.status(500).send(
     createErrorResponse(
       'INTERNAL_SERVER_ERROR',
-      'An unexpected internal server error occurred'
+      errorMessage
     )
   );
 }

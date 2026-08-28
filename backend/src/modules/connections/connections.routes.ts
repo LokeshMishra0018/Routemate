@@ -51,6 +51,18 @@ export const connectionsRoutes: FastifyPluginAsync = async (app: FastifyInstance
     }
   );
 
+  // GET /api/v1/connections/requests - List incoming pending requests
+  app.get('/requests', async (request, reply) => {
+    const result = await connectionsService.listConnections(
+      request.user!.id,
+      'incoming',
+      'pending',
+      1,
+      50
+    );
+    return reply.status(200).send(createSuccessResponse(result.items));
+  });
+
   // GET /api/v1/connections/:id - Get single connection details
   app.get('/:id', async (request, reply) => {
     const { id } = request.params as { id: string };

@@ -6,33 +6,25 @@ import { validateRequest } from '../../plugins/validation.js';
 import { createSuccessResponse } from '../../utils/response.js';
 
 export const usersRoutes: FastifyPluginAsync = async (app: FastifyInstance): Promise<void> => {
-  // GET /api/v1/me - Get current user profile
-  app.get(
-    '/me',
-    {
-      preHandler: [authenticate],
-    },
-    async (request, reply) => {
-      const user = await usersService.getCurrentUserProfile(request.user!.id);
-      return reply.status(200).send(createSuccessResponse(user));
-    }
-  );
+  // GET /api/v1/me & /api/v1/users/me - Get current user profile
+  const handleGetMe = async (request: any, reply: any) => {
+    const user = await usersService.getCurrentUserProfile(request.user!.id);
+    return reply.status(200).send(createSuccessResponse(user));
+  };
+  app.get('/me', { preHandler: [authenticate] }, handleGetMe);
+  app.get('/users/me', { preHandler: [authenticate] }, handleGetMe);
 
-  // PATCH /api/v1/me - Update current user profile
-  app.patch(
-    '/me',
-    {
-      preHandler: [authenticate],
-      preValidation: [validateRequest({ body: updateProfileSchema })],
-    },
-    async (request, reply) => {
-      const updated = await usersService.updateCurrentUserProfile(
-        request.user!.id,
-        request.body as Record<string, unknown>
-      );
-      return reply.status(200).send(createSuccessResponse(updated));
-    }
-  );
+  // PATCH /api/v1/me & /api/v1/users/me & /api/v1/users/me/profile - Update current user profile
+  const handleUpdateMe = async (request: any, reply: any) => {
+    const updated = await usersService.updateCurrentUserProfile(
+      request.user!.id,
+      request.body as Record<string, unknown>
+    );
+    return reply.status(200).send(createSuccessResponse(updated));
+  };
+  app.patch('/me', { preHandler: [authenticate], preValidation: [validateRequest({ body: updateProfileSchema })] }, handleUpdateMe);
+  app.patch('/users/me', { preHandler: [authenticate], preValidation: [validateRequest({ body: updateProfileSchema })] }, handleUpdateMe);
+  app.patch('/users/me/profile', { preHandler: [authenticate], preValidation: [validateRequest({ body: updateProfileSchema })] }, handleUpdateMe);
 
   // GET /api/v1/users/:id - Get public profile
   app.get(
@@ -42,6 +34,10 @@ export const usersRoutes: FastifyPluginAsync = async (app: FastifyInstance): Pro
     },
     async (request, reply) => {
       const { id } = request.params as { id: string };
+      if (id === 'me') {
+        const user = await usersService.getCurrentUserProfile(request.user!.id);
+        return reply.status(200).send(createSuccessResponse(user));
+      }
       const publicProfile = await usersService.getPublicProfile(id);
       return reply.status(200).send(createSuccessResponse(publicProfile));
     }

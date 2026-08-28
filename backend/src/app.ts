@@ -5,6 +5,7 @@ import { registerSecurityPlugins } from './plugins/security.js';
 import { registerRoutes } from './routes/index.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { notFoundHandler } from './middleware/not-found-handler.js';
+import { connectMongo, isMongoConnected } from './db/mongo.js';
 
 export interface AppOptions {
   env?: Env;
@@ -66,6 +67,20 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   // Guarantee X-Request-ID response header on all outgoing HTTP responses
   app.addHook('onSend', async (request, reply) => {
     reply.header('x-request-id', request.id);
+  });
+
+  // Ensure MongoDB connection is established before servicing API routes
+  app.addHook('onRequest', async (request) => {
+    if (request.url.startsWith('/api/v1/health')) {
+      return;
+    }
+    if (!isMongoConnected() && env.NODE_ENV !== 'test') {
+      try {
+        await connectMongo();
+      } catch (dbErr) {
+        request.log.warn({ err: dbErr }, 'On-demand MongoDB connection attempt failed');
+      }
+    }
   });
 
   // Security Plugins (CORS, Helmet, Rate Limiter, Cookies)

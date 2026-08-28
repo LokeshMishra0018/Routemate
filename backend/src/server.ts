@@ -27,7 +27,7 @@ let isShuttingDown = false;
 async function startServer(): Promise<void> {
   logger.info({ nodeEnv: env.NODE_ENV, port: env.PORT, host: env.HOST }, 'Initializing RouteMate backend server...');
 
-  // 1. Connect to MongoDB Atlas / Local MongoDB
+  // 1. Connect to MongoDB Atlas / Local MongoDB with automatic retry
   logger.info('Connecting to MongoDB...');
   try {
     const { db } = await connectMongo();
@@ -39,17 +39,29 @@ async function startServer(): Promise<void> {
     logger.info({ message: seedResult.message }, 'Database initialization complete');
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : String(err);
-    if (env.NODE_ENV === 'production') {
-      logger.fatal(
-        { err: errorMessage },
-        'Failed to connect to MongoDB Atlas in production. Halting startup.'
-      );
-      process.exit(1);
-    } else {
-      logger.warn(
-        { err: errorMessage },
-        'Could not connect to MongoDB on startup. Running in degraded local development mode.'
-      );
+    logger.warn(
+      { err: errorMessage },
+      'Initial connection to MongoDB failed. Server will start and continuously auto-reconnect in the background.'
+    );
+
+    // Continuous auto-reconnection background loop
+    const retryInterval = setInterval(async () => {
+      if (isShuttingDown) {
+        clearInterval(retryInterval);
+        return;
+      }
+      try {
+        const { db } = await connectMongo();
+        logger.info({ database: db.databaseName }, 'Successfully connected to MongoDB on background retry');
+        const seedResult = await seedDatabase(db);
+        logger.info({ message: seedResult.message }, 'Database initialization & seeding complete');
+        clearInterval(retryInterval);
+      } catch {
+        // Keep retrying quietly
+      }
+    }, 5000);
+    if (retryInterval.unref) {
+      retryInterval.unref();
     }
   }
 

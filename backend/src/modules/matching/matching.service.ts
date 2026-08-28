@@ -9,7 +9,7 @@ import { MatchDocument, MatchResponseDto } from './matching.types.js';
 import { NotFoundError, ForbiddenError } from '../../utils/errors.js';
 
 export class MatchingService {
-  private async formatMatchDto(match: MatchDocument): Promise<MatchResponseDto> {
+  private async formatMatchDto(match: MatchDocument): Promise<any> {
     const candidateTrip = await tripsRepository.findTripById(match.candidateTripId);
     const candidateUser = await usersService.getPublicProfile(match.candidateUserId).catch(() => null);
 
@@ -28,7 +28,34 @@ export class MatchingService {
         availableSeats: candidateTrip?.availableSeats || 0,
         notes: candidateTrip?.notes || null,
       },
+      matchedTrip: {
+        id: match.candidateTripId,
+        userId: match.candidateUserId,
+        user: candidateUser || undefined,
+        source: candidateTrip?.source || { name: 'Unknown', normalizedName: 'unknown', coordinates: { type: 'Point', coordinates: [0, 0] } },
+        destination: candidateTrip?.destination || { name: 'Unknown', normalizedName: 'unknown', coordinates: { type: 'Point', coordinates: [0, 0] } },
+        travelDate: candidateTrip?.travelDate || '',
+        departureTime: candidateTrip?.departureTime || '',
+        transportType: candidateTrip?.transportType || 'other',
+        status: candidateTrip?.status || 'planning',
+        availableSeats: candidateTrip?.availableSeats || 0,
+        notes: candidateTrip?.notes || null,
+        createdAt: candidateTrip?.createdAt?.toISOString() || match.createdAt.toISOString(),
+        updatedAt: candidateTrip?.updatedAt?.toISOString() || match.updatedAt.toISOString(),
+      },
+      matchScore: match.score,
       score: match.score,
+      scoreBreakdown: {
+        routeOverlapScore: Math.round(match.routeScore * 100),
+        timeScore: Math.round(match.timeScore * 100),
+        dateScore: Math.round(match.dateScore * 100),
+        transportScore: Math.round(match.transportScore * 100),
+        preferenceScore: Math.round(match.preferenceScore * 100),
+        verificationScore: candidateUser?.verificationStatus === 'approved' ? 100 : 50,
+        totalScore: match.score,
+      },
+      reasons: match.explanation,
+      isCompatible: match.score >= 50,
       routeScore: match.routeScore,
       destinationScore: match.destinationScore,
       dateScore: match.dateScore,

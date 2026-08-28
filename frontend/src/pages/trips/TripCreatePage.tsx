@@ -82,8 +82,14 @@ export const TripCreatePage: React.FC = () => {
         }));
 
       const payload = {
-        source: { name: sourceName.trim() },
-        destination: { name: destName.trim() },
+        source: {
+          name: sourceName.trim(),
+          coordinates: { type: 'Point', coordinates: [77.4977, 28.7532] },
+        },
+        destination: {
+          name: destName.trim(),
+          coordinates: { type: 'Point', coordinates: [77.4977, 28.7532] },
+        },
         travelDate,
         departureTime: departureTime || undefined,
         transportType,
