@@ -251,26 +251,48 @@ export const AdminUsersPage: React.FC = () => {
                 </div>
 
                 {/* Card Action Footer */}
-                <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    leftIcon={<History className="w-3.5 h-3.5" />}
-                    onClick={() => setSelectedUserForHistory(u.id)}
-                    className="text-xs"
-                  >
-                    Safety Audit
-                  </Button>
+                <div className="pt-3 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      leftIcon={<Shield className="w-3.5 h-3.5 text-amber-400" />}
+                      onClick={() => {
+                        setRoleModalUser(u);
+                        setTargetNewRole(isAdmin ? 'student' : 'admin');
+                      }}
+                      className="text-xs py-1 px-2.5 bg-slate-900 border-slate-700 hover:border-amber-500/50"
+                    >
+                      {isAdmin ? 'Demote to Student' : 'Promote to Admin'}
+                    </Button>
 
-                  <Button
-                    size="sm"
-                    variant={isSuspended ? 'success' : 'danger'}
-                    onClick={() => toggleSuspendMutation.mutate({ userId: u.id, isSuspended })}
-                    isLoading={toggleSuspendMutation.isPending}
-                    className="text-xs"
-                  >
-                    {isSuspended ? 'Unsuspend' : 'Suspend'}
-                  </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      leftIcon={<History className="w-3.5 h-3.5 text-slate-400" />}
+                      onClick={() => setSelectedUserForHistory(u.id)}
+                      className="text-xs py-1 px-2 text-slate-400 hover:text-white"
+                    >
+                      Audit
+                    </Button>
+                  </div>
+
+                  {isAdmin ? (
+                    <span className="text-[11px] font-bold text-amber-400/80 bg-amber-950/40 border border-amber-500/20 px-2.5 py-1 rounded-lg">
+                      🛡️ Protected Admin
+                    </span>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant={isSuspended ? 'success' : 'danger'}
+                      leftIcon={isSuspended ? <UserCheck className="w-3.5 h-3.5" /> : <UserX className="w-3.5 h-3.5" />}
+                      onClick={() => toggleSuspendMutation.mutate({ userId: u.id, isSuspended })}
+                      isLoading={toggleSuspendMutation.isPending}
+                      className="text-xs py-1 px-2.5"
+                    >
+                      {isSuspended ? 'Activate Account' : 'Suspend Account'}
+                    </Button>
+                  )}
                 </div>
               </Card>
             );
