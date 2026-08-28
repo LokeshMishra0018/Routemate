@@ -32,7 +32,7 @@ export function initSocketIO(httpServer: HttpServer): SocketIOServer {
     .filter(Boolean);
 
   const corsOrigin =
-    allowedOrigins.includes('*') && env.NODE_ENV !== 'production' ? true : allowedOrigins;
+    allowedOrigins.includes('*') ? true : allowedOrigins.length > 0 ? allowedOrigins : true;
 
   io = new SocketIOServer(httpServer, {
     cors: {

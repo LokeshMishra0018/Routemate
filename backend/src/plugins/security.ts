@@ -36,8 +36,14 @@ export async function registerSecurityPlugins(app: FastifyInstance, env: Env): P
         return;
       }
 
-      // Check against allowed origins list
-      if (allowedOrigins.includes(origin) || (allowedOrigins.includes('*') && env.NODE_ENV !== 'production')) {
+      // Check against allowed origins list or wildcard/vercel domains
+      if (
+        allowedOrigins.includes('*') ||
+        allowedOrigins.includes(origin) ||
+        origin.endsWith('.vercel.app') ||
+        origin.includes('localhost') ||
+        origin.includes('127.0.0.1')
+      ) {
         cb(null, true);
         return;
       }

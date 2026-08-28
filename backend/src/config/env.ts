@@ -78,24 +78,6 @@ const rawEnvSchema = z
           message: 'JWT_REFRESH_SECRET must be at least 32 characters long in production',
         });
       }
-
-      const corsOrigins = (data.CORS_ORIGIN || '').split(',').map((o) => o.trim());
-      if (corsOrigins.includes('*')) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['CORS_ORIGIN'],
-          message: 'CORS_ORIGIN cannot be wildcard "*" in production when credentials are used',
-        });
-      }
-
-      const socketOrigins = (data.SOCKET_CORS_ORIGIN || '').split(',').map((o) => o.trim());
-      if (socketOrigins.includes('*')) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['SOCKET_CORS_ORIGIN'],
-          message: 'SOCKET_CORS_ORIGIN cannot be wildcard "*" in production',
-        });
-      }
     }
   })
   .transform((data) => {
