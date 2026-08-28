@@ -58,6 +58,11 @@ export class TripsRepository {
       query.status = { $in: ['planning', 'confirmed', 'upcoming'] };
     }
 
+    // Exclude admin-hidden trips from public searches
+    if (!filters.userId) {
+      query.isHidden = { $ne: true };
+    }
+
     // Filter by Transport
     if (filters.transportType) {
       query.transportType = filters.transportType;

@@ -339,7 +339,7 @@ export const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance): Pro
     }
   );
 
-  // POST /api/v1/admin/trips/:id/cancel - Force cancel trip with reason & audit log
+  // POST /api/v1/admin/trips/:id/cancel - Force cancel trip (soft cancel)
   app.post(
     '/trips/:id/cancel',
     {
@@ -353,6 +353,72 @@ export const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance): Pro
         id,
         body.reason || 'Administrative policy cancellation'
       );
+      return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
+
+  // DELETE /api/v1/admin/trips/:id - Permanently hard-delete & purge trip from database
+  app.delete(
+    '/trips/:id',
+    {
+      preHandler: [authenticate, requireRole('admin')],
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const result = await adminService.deleteTripByAdmin(request.user!.id, id);
+      return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
+
+  // PATCH & POST /api/v1/admin/trips/:id/visibility - Toggle trip search discovery
+  const handleVisibility = async (request: any, reply: any) => {
+    const { id } = request.params as { id: string };
+    const body = (request.body as { isHidden: boolean }) || {};
+    const result = await adminService.toggleTripVisibility(request.user!.id, id, body.isHidden ?? true);
+    return reply.status(200).send(createSuccessResponse(result));
+  };
+  app.patch('/trips/:id/visibility', { preHandler: [authenticate, requireRole('moderator', 'admin')] }, handleVisibility);
+  app.post('/trips/:id/visibility', { preHandler: [authenticate, requireRole('moderator', 'admin')] }, handleVisibility);
+
+  // POST /api/v1/admin/trips/:id/request-changes - Send revision advisory to host
+  app.post(
+    '/trips/:id/request-changes',
+    {
+      preHandler: [authenticate, requireRole('moderator', 'admin')],
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const body = (request.body as { notes: string }) || {};
+      if (!body.notes || !body.notes.trim()) {
+        return reply.status(400).send({ error: { message: 'Revision notes are required' } });
+      }
+      const result = await adminService.requestTripChanges(request.user!.id, id, body.notes.trim());
+      return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
+
+  // POST /api/v1/admin/trips/:id/force-complete - Administrative force-complete
+  app.post(
+    '/trips/:id/force-complete',
+    {
+      preHandler: [authenticate, requireRole('moderator', 'admin')],
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const result = await adminService.forceCompleteTrip(request.user!.id, id);
+      return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
+
+  // GET /api/v1/admin/trips/:id/inspect - Deep trip manifest details
+  app.get(
+    '/trips/:id/inspect',
+    {
+      preHandler: [authenticate, requireRole('moderator', 'admin')],
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const result = await adminService.getTripDetailsForAdmin(id);
       return reply.status(200).send(createSuccessResponse(result));
     }
   );

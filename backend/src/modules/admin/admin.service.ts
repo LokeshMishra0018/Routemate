@@ -919,6 +919,9 @@ export class AdminService {
           availableSeats: t.availableSeats || 2,
           fareAmount: t.fareEstimate?.amount || 0,
           status: t.status,
+          isHidden: t.isHidden === true,
+          adminNotes: t.adminNotes || null,
+          revisionRequestedAt: t.revisionRequestedAt ? t.revisionRequestedAt.toISOString() : null,
           passengersCount: Math.max(0, (t.totalSeats || 4) - (t.availableSeats || 2)),
           createdAt: t.createdAt ? t.createdAt.toISOString() : new Date().toISOString(),
         };
@@ -938,7 +941,7 @@ export class AdminService {
   }
 
   /**
-   * Admin Force Cancel Trip (with audit log)
+   * Admin Force Cancel Trip (soft cancel)
    */
   async cancelTripByAdmin(adminUserId: string, tripId: string, reason: string) {
     const db = getDb();
@@ -972,6 +975,248 @@ export class AdminService {
     });
 
     return { success: true, message: 'Trip successfully cancelled by administrator.' };
+  }
+
+  /**
+   * Permanently Delete & Purge Trip (Hard Delete from Database to free memory)
+   */
+  async deleteTripByAdmin(adminUserId: string, tripId: string) {
+    const db = getDb();
+    const { ObjectId } = await import('mongodb');
+
+    const trip = await db.collection(COLLECTIONS.TRIPS).findOne({ _id: new ObjectId(tripId) });
+    if (!trip) {
+      throw new NotFoundError('Trip not found');
+    }
+
+    // 1. Delete trip from TRIPS collection
+    await db.collection(COLLECTIONS.TRIPS).deleteOne({ _id: new ObjectId(tripId) });
+
+    // 2. Clean up associated orphaned requests / connections
+    await db.collection(COLLECTIONS.CONNECTIONS).deleteMany({ tripId });
+
+    // 3. Log immutable audit action
+    await adminRepository.logAction({
+      actorUserId: adminUserId,
+      actionType: 'trip_purged_by_admin',
+      targetUserId: trip.userId,
+      targetResourceId: tripId,
+      metadata: {
+        source: trip.source?.name,
+        destination: trip.destination?.name,
+        hostId: trip.userId,
+      },
+      createdAt: new Date(),
+    });
+
+    return { success: true, message: 'Trip and all associated requests permanently wiped from database.' };
+  }
+
+  /**
+   * Toggle Trip Visibility (Hide from public search / Unhide)
+   */
+  async toggleTripVisibility(adminUserId: string, tripId: string, isHidden: boolean) {
+    const db = getDb();
+    const { ObjectId } = await import('mongodb');
+
+    const trip = await db.collection(COLLECTIONS.TRIPS).findOne({ _id: new ObjectId(tripId) });
+    if (!trip) {
+      throw new NotFoundError('Trip not found');
+    }
+
+    await db.collection(COLLECTIONS.TRIPS).updateOne(
+      { _id: new ObjectId(tripId) },
+      {
+        $set: {
+          isHidden,
+          hiddenByAdmin: isHidden,
+          updatedAt: new Date(),
+        },
+      }
+    );
+
+    await adminRepository.logAction({
+      actorUserId: adminUserId,
+      actionType: 'trip_visibility_toggled',
+      targetUserId: trip.userId,
+      targetResourceId: tripId,
+      metadata: { isHidden },
+      createdAt: new Date(),
+    });
+
+    return {
+      success: true,
+      isHidden,
+      message: isHidden ? 'Trip hidden from student search and matches.' : 'Trip restored to public discovery.',
+    };
+  }
+
+  /**
+   * Request Changes / Revisions from Trip Host
+   */
+  async requestTripChanges(adminUserId: string, tripId: string, notes: string) {
+    const db = getDb();
+    const { ObjectId } = await import('mongodb');
+
+    const trip = await db.collection(COLLECTIONS.TRIPS).findOne({ _id: new ObjectId(tripId) });
+    if (!trip) {
+      throw new NotFoundError('Trip not found');
+    }
+
+    const now = new Date();
+    await db.collection(COLLECTIONS.TRIPS).updateOne(
+      { _id: new ObjectId(tripId) },
+      {
+        $set: {
+          adminNotes: notes,
+          revisionRequestedAt: now,
+          updatedAt: now,
+        },
+      }
+    );
+
+    // Create in-app notification for host
+    try {
+      await db.collection(COLLECTIONS.NOTIFICATIONS).insertOne({
+        userId: trip.userId,
+        type: 'trip_revision_requested',
+        title: 'Action Required: Ride Details Revision',
+        message: `Moderator advisory for your ride from ${trip.source?.name || 'Origin'} to ${trip.destination?.name || 'Destination'}: ${notes}`,
+        data: { tripId, notes },
+        isRead: false,
+        createdAt: now,
+      } as any);
+    } catch {
+      // ignore
+    }
+
+    await adminRepository.logAction({
+      actorUserId: adminUserId,
+      actionType: 'trip_changes_requested',
+      targetUserId: trip.userId,
+      targetResourceId: tripId,
+      metadata: { notes },
+      createdAt: now,
+    });
+
+    return { success: true, message: 'Revision request successfully sent to the student host.' };
+  }
+
+  /**
+   * Administrative Force-Complete Trip
+   */
+  async forceCompleteTrip(adminUserId: string, tripId: string) {
+    const db = getDb();
+    const { ObjectId } = await import('mongodb');
+
+    const trip = await db.collection(COLLECTIONS.TRIPS).findOne({ _id: new ObjectId(tripId) });
+    if (!trip) {
+      throw new NotFoundError('Trip not found');
+    }
+
+    const now = new Date();
+    await db.collection(COLLECTIONS.TRIPS).updateOne(
+      { _id: new ObjectId(tripId) },
+      {
+        $set: {
+          status: 'completed',
+          completedAt: now,
+          forceCompletedByAdmin: true,
+          updatedAt: now,
+        },
+      }
+    );
+
+    await adminRepository.logAction({
+      actorUserId: adminUserId,
+      actionType: 'trip_force_completed',
+      targetUserId: trip.userId,
+      targetResourceId: tripId,
+      metadata: {},
+      createdAt: now,
+    });
+
+    return { success: true, message: 'Trip successfully marked as completed.' };
+  }
+
+  /**
+   * Get Deep Trip Manifest Details for Admin Inspection
+   */
+  async getTripDetailsForAdmin(tripId: string) {
+    const db = getDb();
+    const { ObjectId } = await import('mongodb');
+
+    const trip: any = await db.collection(COLLECTIONS.TRIPS).findOne({ _id: new ObjectId(tripId) });
+    if (!trip) {
+      throw new NotFoundError('Trip not found');
+    }
+
+    // Fetch host info
+    const hostUser = await db.collection(COLLECTIONS.USERS).findOne({ _id: new ObjectId(trip.userId) });
+    const hostProfile: any = await db.collection(COLLECTIONS.PROFILES).findOne({ userId: trip.userId });
+
+    // Fetch passenger connections
+    const connections = await db
+      .collection(COLLECTIONS.CONNECTIONS)
+      .find({ tripId, status: { $in: ['accepted', 'pending'] } })
+      .toArray();
+
+    const passengerUserIds = connections.map((c: any) => c.requesterId);
+    const passengerProfiles = await db
+      .collection(COLLECTIONS.PROFILES)
+      .find({ userId: { $in: passengerUserIds } })
+      .toArray();
+
+    const passengerMap = new Map<string, any>();
+    for (const p of passengerProfiles) {
+      passengerMap.set(p.userId, p);
+    }
+
+    const passengers = connections.map((c: any) => {
+      const p = passengerMap.get(c.requesterId);
+      return {
+        id: c._id.toHexString(),
+        userId: c.requesterId,
+        fullName: p?.fullName || 'Student Passenger',
+        trustScore: p?.trustScore || 50,
+        verificationStatus: p?.verificationStatus || 'unverified',
+        status: c.status,
+        pickupSpot: c.pickupSpot || trip.source?.name,
+        seatsRequested: c.seatsRequested || 1,
+        joinedAt: c.createdAt ? c.createdAt.toISOString() : new Date().toISOString(),
+      };
+    });
+
+    return {
+      trip: {
+        id: trip._id.toHexString(),
+        userId: trip.userId,
+        source: trip.source,
+        destination: trip.destination,
+        stops: trip.stops || [],
+        travelDate: trip.travelDate,
+        departureTime: trip.departureTime,
+        vehicleType: trip.vehicleType || 'cab',
+        totalSeats: trip.totalSeats || 4,
+        availableSeats: trip.availableSeats || 2,
+        fareAmount: trip.fareEstimate?.amount || 0,
+        status: trip.status,
+        isHidden: trip.isHidden === true,
+        adminNotes: trip.adminNotes || null,
+        notes: trip.notes || null,
+        createdAt: trip.createdAt ? trip.createdAt.toISOString() : new Date().toISOString(),
+      },
+      host: {
+        userId: trip.userId,
+        fullName: hostProfile?.fullName || 'Student Host',
+        email: hostUser?.email || '',
+        trustScore: hostProfile?.trustScore || 50,
+        verificationStatus: hostProfile?.verificationStatus || 'unverified',
+        collegeName: hostProfile?.collegeName || 'KIET Group of Institutions',
+        avatarUrl: hostProfile?.avatarUrl || null,
+      },
+      passengers,
+    };
   }
 
   /**

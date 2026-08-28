@@ -514,8 +514,54 @@ export interface AdminTripItem {
   availableSeats: number;
   fareAmount: number;
   status: string;
+  isHidden?: boolean;
+  adminNotes?: string | null;
+  revisionRequestedAt?: string | null;
   passengersCount: number;
   createdAt: string;
+}
+
+export interface AdminTripPassenger {
+  id: string;
+  userId: string;
+  fullName: string;
+  trustScore: number;
+  verificationStatus: string;
+  status: string;
+  pickupSpot?: string;
+  seatsRequested: number;
+  joinedAt: string;
+}
+
+export interface AdminTripManifest {
+  trip: {
+    id: string;
+    userId: string;
+    source: { name: string; coordinates?: [number, number] };
+    destination: { name: string; coordinates?: [number, number] };
+    stops: Array<{ name: string; coordinates?: [number, number] }>;
+    travelDate: string;
+    departureTime: string;
+    vehicleType: string;
+    totalSeats: number;
+    availableSeats: number;
+    fareAmount: number;
+    status: string;
+    isHidden: boolean;
+    adminNotes?: string | null;
+    notes?: string | null;
+    createdAt: string;
+  };
+  host: {
+    userId: string;
+    fullName: string;
+    email: string;
+    trustScore: number;
+    verificationStatus: string;
+    collegeName: string;
+    avatarUrl?: string | null;
+  };
+  passengers: AdminTripPassenger[];
 }
 
 export interface AdminMatchingStats {

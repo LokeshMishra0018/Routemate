@@ -11,7 +11,11 @@ export interface AdminActionDocument {
     | 'role_changed'
     | 'report_resolved'
     | 'sos_resolved'
-    | 'trip_cancelled_by_admin';
+    | 'trip_cancelled_by_admin'
+    | 'trip_purged_by_admin'
+    | 'trip_visibility_toggled'
+    | 'trip_changes_requested'
+    | 'trip_force_completed';
   targetUserId: string | null;
   targetResourceId: string | null;
   metadata?: Record<string, unknown>;
