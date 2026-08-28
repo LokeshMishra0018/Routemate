@@ -5,14 +5,23 @@ import {
   MessageSquare,
   Send,
   ShieldCheck,
-  ShieldAlert,
   Search,
   User,
-  ExternalLink,
-  MapPin,
-  Sparkles,
+  Plus,
+  Smile,
+  Check,
+  CheckCheck,
   Lock,
+  MoreVertical,
+  Phone,
+  Video,
+  Sparkles,
   Compass,
+  SlidersHorizontal,
+  Bell,
+  Users,
+  Radio,
+  Settings,
 } from 'lucide-react';
 import { apiClient } from '../../services/api.client';
 import { useAuth } from '../../context/AuthContext';
@@ -21,7 +30,7 @@ import { Conversation, Message, PublicProfile } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { Avatar } from '../../components/ui/Badge';
 import { TrustScoreMeter } from '../../components/ui/TrustScoreMeter';
-import { EmptyState, LoadingSpinner } from '../../components/ui/EmptyState';
+import { LoadingSpinner } from '../../components/ui/EmptyState';
 import { cn } from '../../lib/utils';
 
 export const ChatPage: React.FC = () => {
@@ -32,6 +41,7 @@ export const ChatPage: React.FC = () => {
 
   const [activeConvId, setActiveConvId] = useState<string | null>(conversationId || null);
   const [sidebarSearch, setSidebarSearch] = useState('');
+  const [filterTab, setFilterTab] = useState<'all' | 'unread'>('all');
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [otherUserTyping, setOtherUserTyping] = useState(false);
@@ -52,14 +62,14 @@ export const ChatPage: React.FC = () => {
     },
   });
 
-  // If no active conv in URL, default to first one
+  // Default to first conversation
   useEffect(() => {
     if (!activeConvId && conversations && conversations.length > 0) {
       setActiveConvId(conversations[0].id);
     }
   }, [activeConvId, conversations]);
 
-  // Helper to extract companion profile from conversation payload
+  // Helper to extract companion profile from conversation
   const getPartnerFromConv = (conv?: Conversation, myId?: string): PublicProfile | undefined => {
     if (!conv) return undefined;
     const partnerId = conv.participants?.find((p) => p !== myId);
@@ -82,7 +92,7 @@ export const ChatPage: React.FC = () => {
   const otherParticipantId = activeConversation?.participants?.find((p) => p !== user?.id);
   const cachedOtherProfile = getPartnerFromConv(activeConversation, user?.id);
 
-  // 2. Guaranteed fallback profile fetch if not cached in conversation
+  // 2. Fetch full companion profile
   const { data: fetchedOtherProfile } = useQuery({
     queryKey: ['user-public-profile', otherParticipantId],
     queryFn: async () => {
@@ -106,7 +116,9 @@ export const ChatPage: React.FC = () => {
     enabled: !!activeConvId,
   });
 
-  // 4. Socket.IO Listeners for realtime messages & typing
+  const isSendingRef = useRef(false);
+
+  // 4. Socket.IO Realtime Listeners
   useEffect(() => {
     if (!socket || !activeConvId) return;
 
@@ -116,7 +128,8 @@ export const ChatPage: React.FC = () => {
       if (msg.conversationId === activeConvId) {
         queryClient.setQueryData<Message[]>(['conversation-messages', activeConvId], (old) => {
           if (!old) return [msg];
-          if (old.some((m) => m.id === msg.id)) return old;
+          const newId = msg.id || (msg as any)._id;
+          if (old.some((m) => (m.id || (m as any)._id) === newId)) return old;
           return [...old, msg];
         });
       }
@@ -145,7 +158,7 @@ export const ChatPage: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, otherUserTyping]);
 
-  // 5. Send message mutation
+  // 5. Send message mutation with strict deduplication
   const sendMessageMutation = useMutation({
     mutationFn: async (content: string) => {
       if (!activeConvId) throw new Error('No active conversation');
@@ -158,17 +171,25 @@ export const ChatPage: React.FC = () => {
     onSuccess: (newMsg) => {
       queryClient.setQueryData<Message[]>(['conversation-messages', activeConvId], (old) => {
         if (!old) return [newMsg];
+        const newId = newMsg.id || (newMsg as any)._id;
+        if (old.some((m) => (m.id || (m as any)._id) === newId)) return old;
         return [...old, newMsg];
       });
       queryClient.invalidateQueries({ queryKey: ['conversations-list'] });
-      setInputText('');
+    },
+    onSettled: () => {
+      isSendingRef.current = false;
     },
   });
 
-  const handleSend = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputText.trim() || sendMessageMutation.isPending) return;
-    sendMessageMutation.mutate(inputText.trim());
+  const handleSend = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const text = inputText.trim();
+    if (!text || sendMessageMutation.isPending || isSendingRef.current) return;
+
+    isSendingRef.current = true;
+    setInputText('');
+    sendMessageMutation.mutate(text);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -180,70 +201,171 @@ export const ChatPage: React.FC = () => {
     }
   };
 
-  // Filter conversations based on search
+  // Deduplicate messages by ID before rendering
+  const displayedMessages = useMemo(() => {
+    if (!messages) return [];
+    const seen = new Set<string>();
+    return messages.filter((msg) => {
+      const id = msg.id || (msg as any)._id;
+      if (!id) return true;
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  }, [messages]);
+
+  // Filter conversations
   const filteredConversations = useMemo(() => {
     if (!conversations) return [];
-    if (!sidebarSearch.trim()) return conversations;
-    const query = sidebarSearch.toLowerCase();
+    let list = conversations;
 
-    return conversations.filter((conv) => {
-      const partner = getPartnerFromConv(conv, user?.id);
-      const nameMatch = partner?.fullName?.toLowerCase().includes(query);
-      const collegeMatch = partner?.collegeName?.toLowerCase().includes(query);
-      const lastMsg = (conv.lastMessage as any)?.body || (conv.lastMessage as any)?.content || '';
-      const msgMatch = lastMsg.toLowerCase().includes(query);
-      return nameMatch || collegeMatch || msgMatch;
-    });
-  }, [conversations, sidebarSearch, user?.id]);
+    if (sidebarSearch.trim()) {
+      const q = sidebarSearch.toLowerCase();
+      list = list.filter((conv) => {
+        const partner = getPartnerFromConv(conv, user?.id);
+        const nameMatch = partner?.fullName?.toLowerCase().includes(q);
+        const collegeMatch = partner?.collegeName?.toLowerCase().includes(q);
+        const lastMsg = (conv.lastMessage as any)?.body || (conv.lastMessage as any)?.content || '';
+        const msgMatch = lastMsg.toLowerCase().includes(q);
+        return nameMatch || collegeMatch || msgMatch;
+      });
+    }
+
+    if (filterTab === 'unread') {
+      list = list.filter((c) => (c.unreadCount ?? 0) > 0);
+    }
+
+    return list;
+  }, [conversations, sidebarSearch, filterTab, user?.id]);
 
   return (
-    <div className="h-[calc(100vh-140px)] min-h-[580px] flex rounded-3xl overflow-hidden border border-slate-800 bg-slate-900/60 backdrop-blur-xl shadow-2xl">
-      {/* Sidebar: Conversations List */}
-      <aside className="w-full sm:w-80 md:w-96 border-r border-slate-800 bg-slate-950/70 flex flex-col">
-        {/* Header */}
-        <div className="p-4 border-b border-slate-800 space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <MessageSquare className="w-4 h-4 text-indigo-400" /> Messages
-            </h2>
+    <div className="h-[calc(100vh-120px)] min-h-[620px] flex rounded-xl overflow-hidden border border-[#d1d7db] shadow-2xl bg-[#efeae2] font-sans antialiased text-[#111b21]">
+      {/* ================= 1. WhatsApp Left Thin App Strip ================= */}
+      <div className="w-14 bg-[#f0f2f5] border-r border-[#e9edef] flex-col items-center justify-between py-3 shrink-0 hidden md:flex select-none">
+        {/* Top Navigation Icons */}
+        <div className="flex flex-col items-center gap-4 text-[#54656f]">
+          <button
+            title="Chats"
+            className="w-10 h-10 rounded-full flex items-center justify-center bg-[#d9fdd3] text-[#008069] relative shadow-sm"
+          >
+            <MessageSquare className="w-5 h-5" />
             {conversations && conversations.length > 0 && (
-              <span className="px-2 py-0.5 text-[10px] font-bold bg-indigo-950/80 text-indigo-300 border border-indigo-500/30 rounded-full">
-                {conversations.length} {conversations.length === 1 ? 'chat' : 'chats'}
+              <span className="absolute -top-1 -right-1 bg-[#25d366] text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white">
+                {conversations.length}
               </span>
             )}
-          </div>
+          </button>
 
-          {/* Sidebar Search Input */}
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
-              <Search className="w-3.5 h-3.5" />
-            </div>
+          <Link to="/trips" title="Campus Trips" className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-[#e9edef] text-[#54656f] transition-colors">
+            <Compass className="w-5 h-5" />
+          </Link>
+
+          <Link to="/groups" title="Campus Carpool Groups" className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-[#e9edef] text-[#54656f] transition-colors">
+            <Users className="w-5 h-5" />
+          </Link>
+
+          <Link to="/safety" title="Safety Hub" className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-[#e9edef] text-[#54656f] transition-colors">
+            <ShieldCheck className="w-5 h-5" />
+          </Link>
+        </div>
+
+        {/* Bottom User Avatar */}
+        <div className="flex flex-col items-center gap-3">
+          <Link to="/profile" title="My Profile">
+            <Avatar
+              name={user?.fullName || 'Me'}
+              size="sm"
+              className="ring-2 ring-[#008069] cursor-pointer"
+            />
+          </Link>
+        </div>
+      </div>
+
+      {/* ================= 2. WhatsApp Left Chats Sidebar ================= */}
+      <aside className="w-full sm:w-80 md:w-96 bg-white border-r border-[#e9edef] flex flex-col shrink-0">
+        {/* Chats Top Header */}
+        <div className="px-4 py-3.5 bg-white flex items-center justify-between">
+          <h1 className="text-xl font-black text-[#111b21] tracking-tight">
+            Chats <span className="text-xs font-normal text-[#667781] ml-1">Messages</span>
+          </h1>
+
+          <div className="flex items-center gap-2 text-[#54656f]">
+            <Link
+              to="/trips"
+              title="New Trip / Message"
+              className="p-1.5 hover:bg-[#f0f2f5] rounded-full transition-colors text-[#54656f]"
+            >
+              <Plus className="w-5 h-5" />
+            </Link>
+            <button className="p-1.5 hover:bg-[#f0f2f5] rounded-full transition-colors text-[#54656f]">
+              <MoreVertical className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* WhatsApp Search Bar */}
+        <div className="px-3 pt-1 pb-2 bg-white">
+          <div className="flex items-center bg-[#f0f2f5] rounded-lg px-3 py-1.5">
+            <Search className="w-4 h-4 text-[#54656f] mr-3 shrink-0" />
             <input
               type="text"
               value={sidebarSearch}
               onChange={(e) => setSidebarSearch(e.target.value)}
-              placeholder="Search chats & buddies..."
-              className="w-full pl-9 pr-3 py-1.5 bg-slate-900/80 border border-slate-800 focus:border-indigo-500 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
+              placeholder="Search or start a new chat"
+              className="w-full bg-transparent border-0 text-xs text-[#111b21] placeholder-[#667781] focus:outline-none focus:ring-0"
             />
           </div>
         </div>
 
-        {/* Conversations Scroll Area */}
-        <div className="flex-1 overflow-y-auto divide-y divide-slate-800/40">
-          {convsLoading && <LoadingSpinner size="sm" text="Loading chats..." />}
+        {/* WhatsApp Filter Chips (All, Unread, Favourites) */}
+        <div className="px-3 pb-2 flex items-center gap-1.5 bg-white border-b border-[#f0f2f5]">
+          <button
+            onClick={() => setFilterTab('all')}
+            className={cn(
+              'px-3 py-1 rounded-full text-xs font-medium transition-colors',
+              filterTab === 'all'
+                ? 'bg-[#d9fdd3] text-[#008069] font-bold'
+                : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef]'
+            )}
+          >
+            All
+          </button>
+          <button
+            onClick={() => setFilterTab('unread')}
+            className={cn(
+              'px-3 py-1 rounded-full text-xs font-medium transition-colors',
+              filterTab === 'unread'
+                ? 'bg-[#d9fdd3] text-[#008069] font-bold'
+                : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef]'
+            )}
+          >
+            Unread
+          </button>
+          <button className="px-3 py-1 rounded-full text-xs font-medium bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef]">
+            Campus Buddies
+          </button>
+        </div>
+
+        {/* Conversations Scroll List */}
+        <div className="flex-1 overflow-y-auto divide-y divide-[#f0f2f5]">
+          {convsLoading && (
+            <div className="p-8 flex justify-center">
+              <LoadingSpinner size="sm" text="Loading chats..." />
+            </div>
+          )}
 
           {!convsLoading && (!conversations || conversations.length === 0) && (
-            <div className="p-8 text-center text-xs text-slate-400 space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-slate-500">
+            <div className="p-8 text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-[#f0f2f5] text-[#008069] flex items-center justify-center mx-auto shadow-inner">
                 <MessageSquare className="w-6 h-6" />
               </div>
-              <p className="font-semibold text-slate-300">No active chats</p>
-              <p className="text-slate-500 text-[11px] leading-relaxed">
-                Connect with student travel buddies on campus trips to coordinate and chat securely.
+              <p className="text-sm font-bold text-[#111b21]">No chats yet</p>
+              <p className="text-xs text-[#667781] leading-relaxed">
+                Connect with verified student companions on campus trips to coordinate and chat securely.
               </p>
               <Link to="/trips">
-                <Button size="sm" variant="secondary" className="text-xs">
-                  Browse Trips
+                <Button size="sm" variant="primary" className="text-xs bg-[#008069] hover:bg-[#00705a] text-white">
+                  Browse Campus Trips
                 </Button>
               </Link>
             </div>
@@ -258,44 +380,53 @@ export const ChatPage: React.FC = () => {
               const lastMsgTime = conv.lastMessage?.createdAt
                 ? new Date(conv.lastMessage.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 : null;
+              const isLastMsgMine = conv.lastMessage?.senderId === user?.id;
 
               return (
                 <button
                   key={conv.id}
                   onClick={() => setActiveConvId(conv.id)}
                   className={cn(
-                    'w-full p-3.5 sm:p-4 flex items-start gap-3 text-left transition-all border-l-4',
-                    isActive
-                      ? 'bg-slate-800/90 border-indigo-500 shadow-inner'
-                      : 'border-transparent hover:bg-slate-800/40'
+                    'w-full px-3.5 py-3 flex items-center gap-3 text-left transition-colors',
+                    isActive ? 'bg-[#f0f2f5]' : 'hover:bg-[#f5f6f6]'
                   )}
                 >
-                  <Avatar
-                    name={partnerProfile?.fullName || 'Travel Buddy'}
-                    src={partnerProfile?.avatarUrl}
-                    size="md"
-                    verified={partnerProfile?.verificationStatus === 'approved'}
-                  />
+                  <div className="relative shrink-0">
+                    <Avatar
+                      name={partnerProfile?.fullName || 'Traveler'}
+                      src={partnerProfile?.avatarUrl}
+                      size="md"
+                      verified={partnerProfile?.verificationStatus === 'approved'}
+                    />
+                  </div>
+
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1">
-                      <h4 className="text-xs font-bold text-slate-100 truncate flex items-center gap-1">
-                        {partnerProfile?.fullName || 'Student Companion'}
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-semibold text-[#111b21] truncate flex items-center gap-1">
+                        {partnerProfile?.fullName || 'Travel Partner'}
                         {partnerProfile?.verificationStatus === 'approved' && (
-                          <ShieldCheck className="w-3 h-3 text-emerald-400 shrink-0" />
+                          <ShieldCheck className="w-3.5 h-3.5 text-[#008069] shrink-0" />
                         )}
                       </h4>
-                      {lastMsgTime && <span className="text-[10px] text-slate-500 shrink-0">{lastMsgTime}</span>}
+                      {lastMsgTime && (
+                        <span className="text-[11px] text-[#667781] shrink-0">
+                          {lastMsgTime}
+                        </span>
+                      )}
                     </div>
 
-                    {partnerProfile?.collegeName && (
-                      <p className="text-[10px] text-indigo-400 font-medium truncate mt-0.5">
-                        {partnerProfile.collegeName}
+                    <div className="flex items-center justify-between mt-0.5">
+                      <p className="text-xs text-[#667781] truncate font-normal flex items-center gap-1 max-w-[210px]">
+                        {isLastMsgMine && <CheckCheck className="w-3.5 h-3.5 text-[#53bdeb] shrink-0" />}
+                        <span className="truncate">{lastMsgText}</span>
                       </p>
-                    )}
 
-                    <p className="text-xs text-slate-400 truncate mt-1 leading-normal font-normal">
-                      {lastMsgText}
-                    </p>
+                      {partnerProfile?.collegeName && (
+                        <span className="text-[10px] font-bold text-[#008069] bg-[#d9fdd3] px-1.5 py-0.5 rounded shrink-0 ml-1">
+                          {partnerProfile.collegeName.split(' ')[0]}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </button>
               );
@@ -303,101 +434,122 @@ export const ChatPage: React.FC = () => {
         </div>
       </aside>
 
-      {/* Active Conversation Panel */}
-      <section className="flex-1 flex flex-col bg-slate-900/40 min-w-0">
+      {/* ================= 3. WhatsApp Main Chat Room ================= */}
+      <section className="flex-1 flex flex-col bg-[#efeae2] relative min-w-0">
         {activeConvId && (
           <>
-            {/* Production Grade Chat Header */}
-            <div className="p-4 border-b border-slate-800 bg-slate-950/60 flex flex-wrap items-center justify-between gap-3 backdrop-blur-sm">
-              {/* Traveler Identity & Verified Credentials */}
+            {/* WhatsApp Top Contact Header */}
+            <div className="px-4 py-2.5 bg-[#f0f2f5] border-b border-[#e9edef] flex items-center justify-between gap-3 z-10 shadow-sm">
               <div className="flex items-center gap-3 min-w-0">
                 <Avatar
-                  name={otherProfile?.fullName || 'Travel Buddy'}
+                  name={otherProfile?.fullName || 'Traveler'}
                   src={otherProfile?.avatarUrl}
                   size="md"
                   verified={otherProfile?.verificationStatus === 'approved'}
                 />
+
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-sm font-bold text-white flex items-center gap-1.5 truncate">
+                  <div className="flex items-center gap-1.5 truncate">
+                    <h3 className="text-sm font-bold text-[#111b21] truncate">
                       {otherProfile?.fullName || 'Student Travel Companion'}
                     </h3>
-                    {otherProfile?.verificationStatus === 'approved' ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-500/30 shadow-glow">
-                        <ShieldCheck className="w-3 h-3 text-emerald-400" /> Verified Student
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-800 text-slate-400 border border-slate-700">
-                        Campus Member
+                    {otherProfile?.verificationStatus === 'approved' && (
+                      <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-[#008069] bg-[#d9fdd3] px-1.5 py-0.2 rounded-full">
+                        <ShieldCheck className="w-3 h-3 text-[#008069]" /> Verified
                       </span>
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400 flex-wrap">
-                    {otherProfile?.collegeName && (
-                      <span className="text-slate-300 font-medium truncate">{otherProfile.collegeName}</span>
+                  <p className="text-xs text-[#667781] truncate">
+                    {otherUserTyping ? (
+                      <span className="text-[#008069] font-bold animate-pulse">typing...</span>
+                    ) : otherProfile?.collegeName ? (
+                      <span>{otherProfile.collegeName}</span>
+                    ) : (
+                      'online'
                     )}
-                    {otherProfile?.academicYear && (
-                      <span className="text-[11px] text-slate-500">• Year {otherProfile.academicYear}</span>
-                    )}
-                    {otherProfile?.trustScore !== undefined && (
-                      <div className="inline-flex items-center ml-1">
-                        <TrustScoreMeter score={otherProfile.trustScore} size="sm" />
-                      </div>
-                    )}
-                  </div>
+                  </p>
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex items-center gap-2 shrink-0">
+              {/* Right Side Header Icons */}
+              <div className="flex items-center gap-2 text-[#54656f] shrink-0">
+                {otherProfile?.trustScore !== undefined && (
+                  <div className="hidden lg:inline-flex">
+                    <TrustScoreMeter score={otherProfile.trustScore} size="sm" />
+                  </div>
+                )}
+
                 {otherParticipantId && (
                   <Link to={`/profile/${otherParticipantId}`}>
                     <Button
                       size="sm"
-                      variant="secondary"
-                      leftIcon={<User className="w-3.5 h-3.5 text-indigo-400" />}
-                      className="text-xs border-slate-700 hover:border-slate-600 shadow-sm"
+                      variant="ghost"
+                      leftIcon={<User className="w-3.5 h-3.5 text-[#008069]" />}
+                      className="text-xs text-[#111b21] hover:bg-[#e9edef] border-0"
                     >
-                      View Profile
+                      Profile
                     </Button>
                   </Link>
                 )}
+
+                <button className="p-2 hover:bg-[#e9edef] rounded-full transition-colors text-[#54656f]">
+                  <Search className="w-4 h-4" />
+                </button>
+                <button className="p-2 hover:bg-[#e9edef] rounded-full transition-colors text-[#54656f]">
+                  <MoreVertical className="w-4 h-4" />
+                </button>
               </div>
             </div>
 
-            {/* In-Chat Campus Safety & Privacy Notice */}
-            <div className="px-4 py-2 bg-gradient-to-r from-indigo-950/50 via-slate-900/40 to-slate-950/50 border-b border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
-              <div className="flex items-center gap-1.5">
-                <Lock className="w-3 h-3 text-emerald-400 shrink-0" />
-                <span>
-                  <strong className="text-slate-200">Verified Campus Chat:</strong> End-to-end encrypted for student privacy. Coordinate pickup points and transit schedules safely.
+            {/* WhatsApp Chat Wallpaper Background */}
+            <div
+              className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-2 relative"
+              style={{
+                backgroundColor: '#efeae2',
+                backgroundImage: `radial-gradient(#d1d7db 1.2px, transparent 1.2px)`,
+                backgroundSize: '18px 18px',
+              }}
+            >
+              {/* WhatsApp Centered Date Badge */}
+              <div className="flex justify-center my-2 sticky top-2 z-10">
+                <span className="bg-white text-[#54656f] text-[11px] font-semibold px-3 py-1 rounded-md shadow-sm border border-[#e9edef]">
+                  TODAY
                 </span>
               </div>
-              <Link to="/safety" className="text-indigo-400 hover:text-indigo-300 font-semibold hidden md:inline shrink-0">
-                Safety Guidelines →
-              </Link>
-            </div>
 
-            {/* Messages Scroll Area */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
-              {messagesLoading && <LoadingSpinner text="Loading message history..." />}
+              {/* WhatsApp E2EE Notice Banner */}
+              <div className="max-w-md mx-auto my-3 p-2 rounded-lg bg-[#ffeecd] border border-[#ffdf9e] text-center shadow-sm">
+                <div className="flex items-center justify-center gap-1.5 text-[#54656f] text-xs font-semibold">
+                  <Lock className="w-3 h-3 text-[#54656f]" /> Messages are end-to-end encrypted
+                </div>
+                <p className="text-[10px] text-[#667781] mt-0.5">
+                  No one outside of this chat can read them. Coordinate campus trips safely.
+                </p>
+              </div>
+
+              {messagesLoading && (
+                <div className="py-12 flex justify-center">
+                  <LoadingSpinner text="Loading messages..." />
+                </div>
+              )}
 
               {!messagesLoading && messages && messages.length === 0 && (
-                <div className="h-full flex flex-col items-center justify-center text-center p-8 max-w-md mx-auto space-y-3">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-950/60 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-glow">
-                    <Sparkles className="w-6 h-6" />
+                <div className="h-44 flex flex-col items-center justify-center text-center p-6 space-y-2">
+                  <div className="w-10 h-10 rounded-full bg-white text-[#008069] flex items-center justify-center shadow-sm">
+                    <Sparkles className="w-5 h-5" />
                   </div>
-                  <h4 className="text-sm font-bold text-white">
-                    Start coordinating with {otherProfile?.fullName || 'your travel buddy'}
-                  </h4>
-                  <p className="text-xs text-slate-400 leading-relaxed">
-                    Say hello to confirm meeting points, luggage requirements, route stops, and shared ride timing.
+                  <p className="text-xs font-bold text-[#111b21]">
+                    Say hello to {otherProfile?.fullName || 'your companion'}!
+                  </p>
+                  <p className="text-[11px] text-[#667781]">
+                    Confirm pickup point, departure timing, luggage, and fare sharing.
                   </p>
                 </div>
               )}
 
-              {messages?.map((msg) => {
+              {/* Message Bubbles */}
+              {displayedMessages.map((msg) => {
                 const isMe = msg.senderId === user?.id;
                 const messageBody = (msg as any).body || msg.content || '';
                 const timeString = new Date(msg.createdAt).toLocaleTimeString([], {
@@ -407,88 +559,110 @@ export const ChatPage: React.FC = () => {
 
                 return (
                   <div key={msg.id} className={cn('flex flex-col', isMe ? 'items-end' : 'items-start')}>
-                    <div className="flex items-end gap-2 max-w-[85%] sm:max-w-[75%]">
-                      {!isMe && (
-                        <Avatar
-                          name={otherProfile?.fullName || 'Buddy'}
-                          src={otherProfile?.avatarUrl}
-                          size="sm"
-                          className="shrink-0 mb-1"
-                        />
+                    <div
+                      className={cn(
+                        'relative max-w-[85%] sm:max-w-[65%] px-3 pt-1.5 pb-1 text-xs shadow-sm leading-relaxed break-words',
+                        isMe
+                          ? 'bg-[#d9fdd3] text-[#111b21] rounded-lg rounded-tr-none'
+                          : 'bg-white text-[#111b21] rounded-lg rounded-tl-none'
                       )}
-                      <div>
-                        <div
-                          className={cn(
-                            'rounded-2xl px-4 py-2.5 text-xs shadow-md leading-relaxed break-words',
-                            isMe
-                              ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-br-none shadow-indigo-950/50'
-                              : 'bg-slate-800/90 text-slate-100 border border-slate-700/60 rounded-bl-none shadow-black/20'
-                          )}
-                        >
-                          {messageBody}
-                        </div>
-                        <span
-                          className={cn(
-                            'text-[9px] text-slate-500 mt-1 block px-1',
-                            isMe ? 'text-right' : 'text-left'
-                          )}
-                        >
-                          {timeString}
-                        </span>
+                    >
+                      {/* Message Content */}
+                      <p className="text-xs text-[#111b21] pr-14 leading-relaxed font-normal">
+                        {messageBody}
+                      </p>
+
+                      {/* WhatsApp Inline Timestamp & Blue Double Ticks */}
+                      <div className="absolute bottom-0.5 right-1.5 flex items-center gap-1 text-[10px] text-[#667781] select-none">
+                        <span>{timeString}</span>
+                        {isMe && <CheckCheck className="w-3.5 h-3.5 text-[#53bdeb]" />}
                       </div>
                     </div>
                   </div>
                 );
               })}
 
+              {/* Typing indicator */}
               {otherUserTyping && (
-                <div className="flex items-center gap-2 text-slate-400 text-xs italic pt-1">
+                <div className="flex items-center gap-2 bg-white text-[#667781] text-xs px-3 py-1.5 rounded-full w-fit shadow-sm border border-[#e9edef]">
                   <div className="flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" />
-                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce delay-150" />
-                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce delay-300" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#008069] animate-bounce" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#008069] animate-bounce delay-150" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#008069] animate-bounce delay-300" />
                   </div>
-                  <span>{otherProfile?.fullName || 'Traveler'} is typing...</span>
+                  <span className="text-[11px] text-[#008069] font-medium">
+                    {otherProfile?.fullName || 'Traveler'} is typing...
+                  </span>
                 </div>
               )}
 
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Message Input Footer */}
+            {/* ================= WhatsApp Bottom Input Bar ================= */}
             <form
               onSubmit={handleSend}
-              className="p-3.5 border-t border-slate-800 bg-slate-950/80 flex items-center gap-2.5 shadow-2xl"
+              className="p-2.5 bg-[#f0f2f5] border-t border-[#e9edef] flex items-center gap-2 z-10"
             >
+              {/* Plus Attachment Icon */}
+              <button
+                type="button"
+                className="p-2 text-[#54656f] hover:text-[#111b21] hover:bg-[#e9edef] rounded-full transition-colors"
+                title="Attach"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
+
+              {/* Emoji Icon */}
+              <button
+                type="button"
+                className="p-2 text-[#54656f] hover:text-[#111b21] hover:bg-[#e9edef] rounded-full transition-colors hidden sm:inline-flex"
+                title="Emoji"
+              >
+                <Smile className="w-5 h-5" />
+              </button>
+
+              {/* Text Input */}
               <input
                 type="text"
-                placeholder={`Message ${otherProfile?.fullName || 'travel companion'}...`}
+                placeholder="Type a message"
                 value={inputText}
                 onChange={handleInputChange}
-                className="flex-1 bg-slate-900 border border-slate-700/80 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all shadow-inner"
+                className="flex-1 bg-white text-[#111b21] placeholder-[#667781] border border-transparent focus:border-transparent rounded-lg px-4 py-2 text-xs focus:ring-0 focus:outline-none shadow-sm"
               />
-              <Button
+
+              {/* Green Send Button */}
+              <button
                 type="submit"
-                variant="primary"
-                size="sm"
-                isLoading={sendMessageMutation.isPending}
-                disabled={!inputText.trim()}
-                leftIcon={<Send className="w-3.5 h-3.5" />}
-                className="bg-indigo-600 hover:bg-indigo-500 shadow-glow px-4 h-9 text-xs"
+                disabled={!inputText.trim() || sendMessageMutation.isPending}
+                className={cn(
+                  'w-9 h-9 rounded-full flex items-center justify-center text-white transition-all shadow-sm shrink-0',
+                  inputText.trim()
+                    ? 'bg-[#008069] hover:bg-[#00705a] cursor-pointer'
+                    : 'bg-[#008069]/60 text-white/80 cursor-not-allowed'
+                )}
+                title="Send Message"
               >
-                Send
-              </Button>
+                <Send className="w-4 h-4 ml-0.5" />
+              </button>
             </form>
           </>
         )}
 
         {!activeConvId && (
-          <div className="h-full flex items-center justify-center p-8">
-            <EmptyState
-              icon={<MessageSquare className="w-8 h-8 text-indigo-400" />}
-              title="No Chat Selected"
-              description="Choose a student companion from the left sidebar to coordinate campus travel, shared rides, and luggage."
-            />
+          <div className="h-full flex flex-col items-center justify-center p-8 text-center space-y-4 bg-[#f0f2f5]">
+            <div className="w-16 h-16 rounded-full bg-[#d9fdd3] text-[#008069] flex items-center justify-center shadow-sm">
+              <MessageSquare className="w-8 h-8" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-lg font-bold text-[#111b21]">RouteMate Messages</h3>
+              <p className="text-xs text-[#667781] max-w-sm leading-relaxed">
+                Send and receive messages with verified student travel companions to coordinate your campus rides seamlessly.
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 text-[11px] text-[#667781] bg-white px-3 py-1.5 rounded-full border border-[#e9edef] shadow-sm">
+              <Lock className="w-3.5 h-3.5 text-[#54656f]" /> End-to-end encrypted for student privacy
+            </div>
           </div>
         )}
       </section>
