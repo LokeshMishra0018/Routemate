@@ -131,9 +131,8 @@ export const TripDetailPage: React.FC = () => {
 
   const connection = !isOwner && connections ? connections.find(
     (c) =>
-      (c.tripId && c.tripId === trip.id) ||
-      (c.requesterId === trip.userId && c.recipientId === user?.id) ||
-      (c.requesterId === user?.id && c.recipientId === trip.userId)
+      c.tripId === trip.id &&
+      (c.requesterId === user?.id || c.recipientId === user?.id)
   ) : null;
 
   const isConnected = connection?.status === 'accepted';

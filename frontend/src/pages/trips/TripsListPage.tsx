@@ -93,12 +93,10 @@ export const TripsListPage: React.FC = () => {
 
   const getConnectionForTrip = (trip: any) => {
     if (!currentUserId || !connections) return null;
-    const otherUserId = trip.userId || trip.user?.id || trip.user?.userId;
     return connections.find(
       (c) =>
-        (c.tripId && c.tripId === trip.id) ||
-        (c.requesterId === otherUserId && c.recipientId === currentUserId) ||
-        (c.requesterId === currentUserId && c.recipientId === otherUserId)
+        c.tripId === trip.id &&
+        (c.requesterId === currentUserId || c.recipientId === currentUserId)
     );
   };
 
