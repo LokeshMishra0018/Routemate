@@ -16,40 +16,50 @@ export class NodemailerEmailProvider implements EmailProvider {
     }
 
     if (env.SMTP_USER && env.SMTP_PASS) {
-      const isGmail = env.SMTP_HOST === 'smtp.gmail.com' || !env.SMTP_HOST;
-      this.transporter = nodemailer.createTransport(
-        isGmail
-          ? {
-              service: 'gmail',
-              auth: {
-                user: env.SMTP_USER,
-                pass: env.SMTP_PASS,
-              },
-              connectionTimeout: 8000,
-              greetingTimeout: 8000,
-              socketTimeout: 10000,
-            }
-          : {
-              host: env.SMTP_HOST,
-              port: env.SMTP_PORT || 587,
-              secure: env.SMTP_SECURE ?? env.SMTP_PORT === 465,
-              auth: {
-                user: env.SMTP_USER,
-                pass: env.SMTP_PASS,
-              },
-              connectionTimeout: 8000,
-              greetingTimeout: 8000,
-              socketTimeout: 10000,
-            }
-      );
+      const smtpUser = env.SMTP_USER.trim();
+      const smtpPass = env.SMTP_PASS.replace(/\s+/g, '').replace(/["']/g, '').trim();
+      const host = env.SMTP_HOST || 'smtp.gmail.com';
+      const port = env.SMTP_PORT || 465;
+      const secure = env.SMTP_SECURE !== undefined ? env.SMTP_SECURE : port === 465;
+
+      this.transporter = nodemailer.createTransport({
+        host,
+        port,
+        secure,
+        auth: {
+          user: smtpUser,
+          pass: smtpPass,
+        },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
+      });
     }
     return this.transporter;
+  }
+
+  async verifyTransport(): Promise<boolean> {
+    const transporter = this.getTransporter();
+    if (!transporter) {
+      console.log('[SMTP][INIT] No live SMTP credentials configured. Emails will be logged to console.');
+      return false;
+    }
+
+    try {
+      await transporter.verify();
+      console.log('[SMTP][INIT] ✅ SMTP transport verified successfully and connected to mail server.');
+      return true;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('[SMTP][INIT] ❌ SMTP transport verification failed:', message);
+      return false;
+    }
   }
 
   async sendVerificationEmail(to: string, otp: string, name?: string): Promise<void> {
     const env = getEnv();
     const studentName = name || 'Student';
-    const fromAddress = env.SMTP_USER ? `RouteMate <${env.SMTP_USER}>` : env.EMAIL_FROM;
+    const fromAddress = env.SMTP_USER ? `RouteMate <${env.SMTP_USER.trim()}>` : env.EMAIL_FROM;
 
     // Record in memory for tests/diagnostics
     lastSentEmails.push({ to, type: 'VERIFICATION', token: otp, timestamp: new Date() });
@@ -116,7 +126,7 @@ export class NodemailerEmailProvider implements EmailProvider {
   async sendPasswordResetEmail(to: string, otp: string, name?: string): Promise<void> {
     const env = getEnv();
     const studentName = name || 'Student';
-    const fromAddress = env.SMTP_USER ? `RouteMate <${env.SMTP_USER}>` : env.EMAIL_FROM;
+    const fromAddress = env.SMTP_USER ? `RouteMate <${env.SMTP_USER.trim()}>` : env.EMAIL_FROM;
 
     lastSentEmails.push({ to, type: 'PASSWORD_RESET', token: otp, timestamp: new Date() });
     console.log(`[EMAIL][RESET_PASSWORD] From: ${fromAddress} | To: ${to} (${studentName}) | 6-Digit OTP: ${otp}`);
@@ -180,7 +190,7 @@ export class NodemailerEmailProvider implements EmailProvider {
 
   async sendVerificationStatusEmail(to: string, status: 'approved' | 'rejected', reason?: string): Promise<void> {
     const env = getEnv();
-    const fromAddress = env.SMTP_USER ? `RouteMate <${env.SMTP_USER}>` : env.EMAIL_FROM;
+    const fromAddress = env.SMTP_USER ? `RouteMate <${env.SMTP_USER.trim()}>` : env.EMAIL_FROM;
     lastSentEmails.push({ to, type: `VERIFICATION_${status.toUpperCase()}`, timestamp: new Date() });
     console.log(`[EMAIL][STATUS] From: ${fromAddress} | To: ${to} | Status: ${status} | Reason: ${reason || 'N/A'}`);
 

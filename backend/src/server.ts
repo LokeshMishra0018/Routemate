@@ -76,6 +76,14 @@ async function startServer(): Promise<void> {
     // 5. Initialize Socket.IO on the Fastify HTTP server
     initSocketIO(app.server);
     logger.info('RouteMate Socket.IO gateway initialized');
+
+    // 6. Verify SMTP email provider readiness
+    const { getEmailProvider } = await import('./lib/email/email.interface.js');
+    const { NodemailerEmailProvider } = await import('./lib/email/nodemailer.service.js');
+    const provider = getEmailProvider();
+    if (provider instanceof NodemailerEmailProvider) {
+      provider.verifyTransport().catch(() => {});
+    }
   } catch (err) {
     logger.fatal({ err }, 'Fatal error during server startup');
     process.exit(1);
