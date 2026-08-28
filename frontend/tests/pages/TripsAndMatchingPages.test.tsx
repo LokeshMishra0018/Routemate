@@ -105,7 +105,7 @@ describe('Trips & Matching Feature Tests', () => {
 
       expect(screen.getByText(/Hello, Aarav Sharma/i)).toBeInTheDocument();
       expect(screen.getByText('KIET Campus Network')).toBeInTheDocument();
-      expect(screen.getByText('Verified Student')).toBeInTheDocument();
+      expect(screen.getByText('Official ID Verified')).toBeInTheDocument();
 
       await waitFor(() => {
         expect(screen.getByText('KIET Gate 1')).toBeInTheDocument();

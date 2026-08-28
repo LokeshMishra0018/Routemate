@@ -6,6 +6,8 @@ import { getEmailProvider } from '../../lib/email/email.interface.js';
 import { NotFoundError, ValidationError } from '../../utils/errors.js';
 import { ReviewVerificationInput } from './admin.types.js';
 import type { ReportCategory, ReportStatus, SosStatus, ReportDocument } from '../safety/safety.types.js';
+import { collegesService } from '../colleges/colleges.service.js';
+import { getStorageProvider } from '../../lib/storage/storage.interface.js';
 import { getDb } from '../../db/mongo.js';
 import { COLLECTIONS } from '../../db/collections.js';
 
@@ -15,16 +17,58 @@ export class AdminService {
    */
   async getPendingVerifications(page = 1, pageSize = 20) {
     const { items, totalCount } = await verificationRepository.findPendingQueue(page, pageSize);
+
+    const enrichedItems = await Promise.all(
+      items.map(async (doc) => {
+        let userDto: { fullName: string; email: string; avatarUrl: string | null; collegeName: string } = {
+          fullName: 'Student',
+          email: '',
+          avatarUrl: null,
+          collegeName: 'KIET Group of Institutions',
+        };
+
+        try {
+          const user = await usersRepository.findUserById(doc.userId);
+          const profile = await usersRepository.findProfileByUserId(doc.userId);
+          let collegeName = 'KIET Group of Institutions';
+
+          if (doc.collegeId || profile?.collegeId) {
+            try {
+              const college = await collegesService.getCollegeById(doc.collegeId || profile?.collegeId || '');
+              if (college) collegeName = college.name;
+            } catch {
+              // ignore
+            }
+          }
+
+          if (user) {
+            userDto = {
+              fullName: profile?.fullName || user.email.split('@')[0],
+              email: user.email,
+              avatarUrl: profile?.avatarUrl || null,
+              collegeName,
+            };
+          }
+        } catch {
+          // ignore lookup errors
+        }
+
+        return {
+          id: doc._id.toHexString(),
+          userId: doc.userId,
+          collegeId: doc.collegeId,
+          documentMimeType: doc.documentMimeType,
+          documentSize: doc.documentSize,
+          documentUrl: `/api/v1/admin/verifications/${doc._id.toHexString()}/document`,
+          status: doc.status,
+          createdAt: doc.createdAt.toISOString(),
+          user: userDto,
+        };
+      })
+    );
+
     return {
-      items: items.map((doc) => ({
-        id: doc._id.toHexString(),
-        userId: doc.userId,
-        collegeId: doc.collegeId,
-        documentMimeType: doc.documentMimeType,
-        documentSize: doc.documentSize,
-        status: doc.status,
-        createdAt: doc.createdAt.toISOString(),
-      })),
+      items: enrichedItems,
       pagination: {
         page,
         pageSize,
@@ -32,6 +76,28 @@ export class AdminService {
         totalPages: Math.ceil(totalCount / pageSize) || 1,
         hasNextPage: page * pageSize < totalCount,
       },
+    };
+  }
+
+  /**
+   * Stream / download private student ID verification document for admin review
+   */
+  async getVerificationDocument(verificationId: string): Promise<{ buffer: Buffer; mimeType: string; filename: string }> {
+    const doc = await verificationRepository.findById(verificationId);
+    if (!doc) {
+      throw new NotFoundError('Verification request not found');
+    }
+
+    const storageProvider = getStorageProvider();
+    const fileData = await storageProvider.getPrivateFileBuffer(doc.documentStorageKey);
+    if (!fileData) {
+      throw new NotFoundError('Verification document file not found in storage');
+    }
+
+    return {
+      buffer: fileData.buffer,
+      mimeType: doc.documentMimeType || fileData.mimeType || 'image/jpeg',
+      filename: `student_id_${doc.userId}_${verificationId}`,
     };
   }
 

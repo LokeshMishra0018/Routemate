@@ -21,14 +21,19 @@ declare module 'fastify' {
  * Fastify preHandler hook: verifies JWT access token and attaches user to request
  */
 export async function authenticate(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
+  let token: string | undefined;
   const authHeader = request.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    throw new UnauthorizedError('Authentication token is required');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.substring(7).trim();
+  } else {
+    const query = request.query as { token?: string } | undefined;
+    if (query?.token) {
+      token = query.token.trim();
+    }
   }
 
-  const token = authHeader.substring(7).trim();
   if (!token) {
-    throw new UnauthorizedError('Authentication token is missing');
+    throw new UnauthorizedError('Authentication token is required');
   }
 
   let payload: AccessTokenPayload;

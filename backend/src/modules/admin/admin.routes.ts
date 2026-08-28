@@ -21,6 +21,24 @@ export const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance): Pro
     }
   );
 
+  // GET /api/v1/admin/verifications/:id/document - Stream student ID document image/PDF
+  app.get(
+    '/verifications/:id/document',
+    {
+      preHandler: [authenticate, requireRole('moderator', 'admin')],
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const { buffer, mimeType, filename } = await adminService.getVerificationDocument(id);
+
+      return reply
+        .header('Content-Type', mimeType)
+        .header('Content-Disposition', `inline; filename="${filename}"`)
+        .header('Cache-Control', 'private, max-age=3600')
+        .send(buffer);
+    }
+  );
+
   // PATCH /api/v1/admin/verifications/:id - Approve or Reject verification
   app.patch(
     '/verifications/:id',

@@ -9,12 +9,18 @@ import {
   FileText,
   Clock,
   User,
+  ExternalLink,
+  Download,
+  Building,
+  Mail,
+  Calendar,
 } from 'lucide-react';
-import { apiClient } from '../../services/api.client';
+import { apiClient, getAuthToken } from '../../services/api.client';
 import { useToast } from '../../context/ToastContext';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Badge, Avatar } from '../../components/ui/Badge';
+import { TrustBadge } from '../../components/common/TrustBadge';
 import { Modal } from '../../components/ui/Modal';
 import { Textarea } from '../../components/ui/Select';
 import { EmptyState, ErrorState, LoadingSpinner } from '../../components/ui/EmptyState';
@@ -77,6 +83,12 @@ export const AdminVerificationsPage: React.FC = () => {
   });
 
   const list = verifications || [];
+  const token = getAuthToken();
+
+  const getDocUrl = (docUrl?: string) => {
+    if (!docUrl) return '';
+    return token ? `${docUrl}?token=${encodeURIComponent(token)}` : docUrl;
+  };
 
   return (
     <div className="space-y-6">
@@ -103,107 +115,195 @@ export const AdminVerificationsPage: React.FC = () => {
 
       {!isLoading && !isError && list.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {list.map((req: any) => (
-            <Card key={req.id} className="glass-card p-5 space-y-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <Avatar name={req.user?.fullName} src={req.user?.avatarUrl} size="md" />
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-100">{req.user?.fullName || 'Student'}</h4>
-                    <p className="text-xs text-slate-400">
-                      {req.user?.collegeName || 'KIET'} • {req.user?.email}
-                    </p>
+          {list.map((req: any) => {
+            const documentStreamUrl = getDocUrl(req.documentUrl);
+            const isPdf = req.documentMimeType === 'application/pdf' || req.documentUrl?.endsWith('.pdf');
+
+            return (
+              <Card key={req.id} className="glass-card p-5 space-y-4 border-slate-700/60 shadow-xl">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <Avatar name={req.user?.fullName} src={req.user?.avatarUrl} size="md" />
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-100 flex items-center gap-1.5">
+                        <span>{req.user?.fullName || 'Student'}</span>
+                        <TrustBadge tier="partially_verified" iconOnly size="xs" />
+                      </h4>
+                      <p className="text-xs text-slate-400">
+                        {req.user?.collegeName || 'KIET'} • {req.user?.email}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant="warning" size="sm">
+                    Pending
+                  </Badge>
+                </div>
+
+                {/* Document Thumbnail / Quick View */}
+                <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs text-slate-300">
+                      <FileText className="w-4 h-4 text-indigo-400" />
+                      <span className="font-semibold">Uploaded Student ID</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400">
+                      {req.documentSize ? `${(req.documentSize / 1024).toFixed(0)} KB` : ''} ({req.documentMimeType?.split('/')[1]?.toUpperCase() || 'IMG'})
+                    </span>
+                  </div>
+
+                  {/* Thumbnail Banner */}
+                  <div
+                    onClick={() => setSelectedReq(req)}
+                    className="cursor-pointer group relative h-32 rounded-lg bg-slate-950/80 border border-slate-800/80 overflow-hidden flex items-center justify-center hover:border-indigo-500/50 transition-all"
+                  >
+                    {isPdf ? (
+                      <div className="flex flex-col items-center gap-1.5 text-indigo-400 group-hover:scale-105 transition-transform">
+                        <FileText className="w-8 h-8" />
+                        <span className="text-xs font-bold text-slate-200">PDF Student Document</span>
+                      </div>
+                    ) : (
+                      <img
+                        src={documentStreamUrl}
+                        alt="Student ID Document Preview"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform opacity-90 group-hover:opacity-100"
+                        onError={(e) => {
+                          // Fallback if image fails to load
+                          (e.target as HTMLElement).style.display = 'none';
+                        }}
+                      />
+                    )}
+                    <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 text-xs font-bold text-white backdrop-blur-[1px]">
+                      <Eye className="w-4 h-4" /> Click to Inspect Document
+                    </div>
                   </div>
                 </div>
-                <Badge variant="warning" size="sm">
-                  Pending
-                </Badge>
-              </div>
 
-              {/* Document Link / Preview button */}
-              <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs text-slate-300">
-                  <FileText className="w-4 h-4 text-indigo-400" />
-                  <span className="font-semibold">Uploaded ID Document</span>
+                {/* Action Buttons */}
+                <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    leftIcon={<Eye className="w-3.5 h-3.5" />}
+                    onClick={() => setSelectedReq(req)}
+                    className="text-xs"
+                  >
+                    Inspect Document
+                  </Button>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      leftIcon={<XCircle className="w-3.5 h-3.5" />}
+                      onClick={() => {
+                        setSelectedReq(req);
+                        setIsRejectModalOpen(true);
+                      }}
+                    >
+                      Reject
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="success"
+                      leftIcon={<CheckCircle className="w-3.5 h-3.5" />}
+                      onClick={() => approveMutation.mutate(req.id)}
+                      isLoading={approveMutation.isPending}
+                    >
+                      Approve ID
+                    </Button>
+                  </div>
                 </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  leftIcon={<Eye className="w-3.5 h-3.5" />}
-                  onClick={() => setSelectedReq(req)}
-                  className="text-xs"
-                >
-                  View Document
-                </Button>
-              </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
-              {/* Action Buttons */}
-              <div className="pt-2 border-t border-slate-800 flex items-center justify-end gap-2">
+      {/* View & Inspect Document Modal */}
+      <Modal
+        isOpen={!!selectedReq && !isRejectModalOpen}
+        onClose={() => setSelectedReq(null)}
+        title={`Inspect Student ID: ${selectedReq?.user?.fullName || 'Student'}`}
+        description="Verify student name, photo, and institutional credentials before approving."
+      >
+        {selectedReq && (
+          <div className="space-y-4 pt-2">
+            {/* Student Metadata Card */}
+            <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+              <div>
+                <span className="text-[10px] text-slate-500 uppercase tracking-wider block font-bold">Student Name</span>
+                <span className="font-bold text-slate-100">{selectedReq.user?.fullName || 'Student'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-500 uppercase tracking-wider block font-bold">Email Address</span>
+                <span className="text-slate-300 truncate block">{selectedReq.user?.email || 'N/A'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-500 uppercase tracking-wider block font-bold">College</span>
+                <span className="text-slate-300 truncate block">{selectedReq.user?.collegeName || 'KIET'}</span>
+              </div>
+            </div>
+
+            {/* Document Preview Box */}
+            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex flex-col items-center justify-center min-h-[300px]">
+              {selectedReq.documentMimeType === 'application/pdf' || selectedReq.documentUrl?.endsWith('.pdf') ? (
+                <div className="space-y-3 text-center">
+                  <FileText className="w-16 h-16 text-indigo-400 mx-auto" />
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-200">PDF Student ID Document</h4>
+                    <p className="text-xs text-slate-400 mt-1">Uploaded document is in PDF format.</p>
+                  </div>
+                  <a
+                    href={getDocUrl(selectedReq.documentUrl)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg transition-colors"
+                  >
+                    <ExternalLink className="w-4 h-4" /> Open Full PDF in New Tab
+                  </a>
+                </div>
+              ) : (
+                <div className="space-y-2 w-full flex flex-col items-center">
+                  <img
+                    src={getDocUrl(selectedReq.documentUrl)}
+                    alt="Student ID Document"
+                    className="max-h-[420px] w-auto max-w-full object-contain rounded-xl shadow-2xl border border-slate-800"
+                  />
+                  <a
+                    href={getDocUrl(selectedReq.documentUrl)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 mt-2 font-semibold"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" /> View Original Full Resolution
+                  </a>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+              <Button variant="ghost" onClick={() => setSelectedReq(null)}>
+                Close
+              </Button>
+
+              <div className="flex items-center gap-2">
                 <Button
-                  size="sm"
                   variant="danger"
-                  leftIcon={<XCircle className="w-3.5 h-3.5" />}
-                  onClick={() => {
-                    setSelectedReq(req);
-                    setIsRejectModalOpen(true);
-                  }}
+                  leftIcon={<XCircle className="w-4 h-4" />}
+                  onClick={() => setIsRejectModalOpen(true)}
                 >
                   Reject
                 </Button>
                 <Button
-                  size="sm"
                   variant="success"
-                  leftIcon={<CheckCircle className="w-3.5 h-3.5" />}
-                  onClick={() => approveMutation.mutate(req.id)}
+                  leftIcon={<CheckCircle className="w-4 h-4" />}
+                  onClick={() => approveMutation.mutate(selectedReq.id)}
                   isLoading={approveMutation.isPending}
                 >
-                  Approve ID
+                  Approve Verified ID
                 </Button>
               </div>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {/* View Document Modal */}
-      <Modal
-        isOpen={!!selectedReq && !isRejectModalOpen}
-        onClose={() => setSelectedReq(null)}
-        title={`Student ID: ${selectedReq?.user?.fullName || 'Review'}`}
-        description="Verify that name, college name, and expiry date are genuine."
-      >
-        {selectedReq && (
-          <div className="space-y-4 pt-2">
-            <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center min-h-[250px]">
-              {selectedReq.documentUrl?.endsWith('.pdf') ? (
-                <a
-                  href={selectedReq.documentUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs font-bold text-indigo-400 underline"
-                >
-                  Open PDF Document in New Tab
-                </a>
-              ) : (
-                <img
-                  src={selectedReq.documentUrl}
-                  alt="Student ID Document"
-                  className="max-h-72 object-contain rounded-lg shadow-md"
-                />
-              )}
-            </div>
-
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setSelectedReq(null)}>
-                Close
-              </Button>
-              <Button
-                variant="success"
-                onClick={() => approveMutation.mutate(selectedReq.id)}
-                isLoading={approveMutation.isPending}
-              >
-                Approve Verified ID
-              </Button>
             </div>
           </div>
         )}
