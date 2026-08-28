@@ -49,9 +49,20 @@ export const LoginPage: React.FC = () => {
 
       <CardContent className="space-y-4">
         {error && (
-          <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-300 text-xs flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{error}</span>
+          <div className="p-3.5 rounded-xl bg-rose-950/70 border border-rose-800 text-rose-300 text-xs flex flex-col gap-2 shadow-lg">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+              <span>{error}</span>
+            </div>
+            {error.toLowerCase().includes('verify') && (
+              <button
+                type="button"
+                onClick={() => navigate('/verify-email', { state: { email } })}
+                className="mt-1 self-start font-bold text-indigo-300 hover:text-indigo-200 underline transition-colors cursor-pointer text-xs"
+              >
+                Go to Verification &amp; Enter 6-Digit OTP &rarr;
+              </button>
+            )}
           </div>
         )}
 

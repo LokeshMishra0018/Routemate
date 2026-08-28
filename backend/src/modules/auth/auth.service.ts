@@ -3,6 +3,7 @@ import { collegesService } from '../colleges/colleges.service.js';
 import { hashPassword, verifyPassword, hashToken, generateRandomToken, generateNumericOtp } from '../../lib/crypto.js';
 import { generateAccessToken, generateRefreshToken } from '../../lib/jwt.js';
 import { getEmailProvider } from '../../lib/email/email.interface.js';
+import { getEnv } from '../../config/env.js';
 import { ConflictError, UnauthorizedError, ValidationError, ForbiddenError } from '../../utils/errors.js';
 import { UserProfileDto } from '../users/users.types.js';
 
@@ -188,6 +189,13 @@ export class AuthService {
     }
     if (user.status === 'deactivated') {
       throw new ForbiddenError('Account is deactivated.');
+    }
+
+    // Check email verification status: unverified users cannot log in without entering OTP
+    if (getEnv().NODE_ENV !== 'test' && !user.emailVerifiedAt) {
+      throw new ForbiddenError(
+        'Please verify your student email address before logging in. Enter the 6-digit verification code sent to your email.'
+      );
     }
 
     const userId = user._id.toHexString();

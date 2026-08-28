@@ -11,6 +11,9 @@ export class NodemailerEmailProvider implements EmailProvider {
     }
 
     const env = getEnv();
+    if (env.NODE_ENV === 'test') {
+      return null;
+    }
     if (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS) {
       this.transporter = nodemailer.createTransport({
         host: env.SMTP_HOST,
