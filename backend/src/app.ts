@@ -69,9 +69,16 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
     reply.header('x-request-id', request.id);
   });
 
-  // Ensure MongoDB connection is established before servicing API routes
+  // Ensure MongoDB connection is established before servicing API routes (skip for probes)
   app.addHook('onRequest', async (request) => {
-    if (request.url.startsWith('/api/v1/health')) {
+    const path = request.url.split('?')[0];
+    if (
+      path === '/' ||
+      path === '/health' ||
+      path === '/healthz' ||
+      path === '/ready' ||
+      path.startsWith('/api/v1/health')
+    ) {
       return;
     }
     if (!isMongoConnected() && env.NODE_ENV !== 'test') {

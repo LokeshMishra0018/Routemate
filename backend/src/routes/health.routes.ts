@@ -8,6 +8,14 @@ export const healthRoutes: FastifyPluginAsync = async (app: FastifyInstance): Pr
    * Returns 200 immediately if the Fastify process is running and responding.
    * Does NOT depend on MongoDB or external services.
    */
+  app.get('/', async (_request, reply) => {
+    return reply.status(200).send({ status: 'ok', service: 'routemate-backend' });
+  });
+
+  app.head('/', async (_request, reply) => {
+    return reply.status(200).send();
+  });
+
   app.get('/health', async (_request, reply) => {
     return reply.status(200).send(
       createSuccessResponse({
