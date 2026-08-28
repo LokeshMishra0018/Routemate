@@ -12,10 +12,6 @@ export const healthRoutes: FastifyPluginAsync = async (app: FastifyInstance): Pr
     return reply.status(200).send({ status: 'ok', service: 'routemate-backend' });
   });
 
-  app.head('/', async (_request, reply) => {
-    return reply.status(200).send();
-  });
-
   app.get('/health', async (_request, reply) => {
     return reply.status(200).send(
       createSuccessResponse({
