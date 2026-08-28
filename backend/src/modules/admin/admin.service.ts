@@ -170,7 +170,7 @@ export class AdminService {
   }
 
   /**
-   * List users for administration
+   * List users for administration with dynamic profile and verification tiers
    */
   async listUsers(page = 1, pageSize = 20, search?: string) {
     const filter: Record<string, unknown> = {};
@@ -180,16 +180,52 @@ export class AdminService {
 
     const { items, totalCount } = await adminRepository.findUsers(filter, page, pageSize);
 
-    return {
-      items: items.map((u) => ({
+    // Fetch corresponding profiles in batch
+    const userIds = items.map((u) => u._id.toHexString());
+    const profiles = await getDb()
+      .collection(COLLECTIONS.PROFILES)
+      .find({ userId: { $in: userIds } })
+      .toArray();
+
+    const profileMap = new Map<string, any>();
+    for (const p of profiles) {
+      profileMap.set(p.userId, p);
+    }
+
+    const enrichedUsers = items.map((u) => {
+      const p = profileMap.get(u._id.toHexString());
+      const verificationStatus = p?.verificationStatus || (u.emailVerifiedAt ? 'unverified' : 'unverified');
+
+      let verificationTier: string;
+      if (u.role === 'admin') {
+        verificationTier = 'admin';
+      } else if (verificationStatus === 'approved') {
+        verificationTier = 'fully_verified';
+      } else if (u.emailVerifiedAt || verificationStatus === 'pending') {
+        verificationTier = 'partially_verified';
+      } else {
+        verificationTier = 'unverified';
+      }
+
+      return {
         id: u._id.toHexString(),
         email: u.email,
+        fullName: p?.fullName || u.email.split('@')[0],
+        avatarUrl: p?.avatarUrl || null,
         role: u.role,
         status: u.status,
+        verificationStatus,
+        verificationTier,
+        trustScore: p?.trustScore || (u.role === 'admin' ? 100 : u.emailVerifiedAt ? 40 : 10),
+        collegeName: p?.collegeName || 'KIET Group of Institutions',
         emailVerified: u.emailVerifiedAt !== null,
         createdAt: u.createdAt.toISOString(),
         lastLoginAt: u.lastLoginAt?.toISOString() || null,
-      })),
+      };
+    });
+
+    return {
+      items: enrichedUsers,
       pagination: {
         page,
         pageSize,
@@ -197,6 +233,50 @@ export class AdminService {
         totalPages: Math.ceil(totalCount / pageSize) || 1,
         hasNextPage: page * pageSize < totalCount,
       },
+    };
+  }
+
+  /**
+   * Update user role (student <-> admin) with guardrails and audit logging
+   */
+  async updateUserRole(adminUserId: string, targetUserId: string, newRole: 'student' | 'admin') {
+    const targetUser = await usersRepository.findUserById(targetUserId);
+    if (!targetUser) {
+      throw new NotFoundError('Target user account not found');
+    }
+
+    if (targetUserId === adminUserId && newRole !== 'admin') {
+      throw new ValidationError('You cannot demote your own administrator account');
+    }
+
+    const previousRole = targetUser.role;
+    await usersRepository.updateUser(targetUserId, { role: newRole });
+
+    // Update profile trust score accordingly
+    if (newRole === 'admin') {
+      await usersRepository.updateProfile(targetUserId, { trustScore: 100 });
+    } else {
+      const profile = await usersRepository.findProfileByUserId(targetUserId);
+      await usersRepository.updateProfile(targetUserId, {
+        trustScore: profile?.verificationStatus === 'approved' ? 80 : 40,
+      });
+    }
+
+    const now = new Date();
+    await adminRepository.logAction({
+      actorUserId: adminUserId,
+      actionType: 'role_changed',
+      targetUserId,
+      targetResourceId: null,
+      metadata: { previousRole, newRole },
+      createdAt: now,
+    });
+
+    return {
+      userId: targetUserId,
+      previousRole,
+      newRole,
+      message: `User role successfully updated from ${previousRole} to ${newRole}.`,
     };
   }
 

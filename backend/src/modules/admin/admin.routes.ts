@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { adminService } from './admin.service.js';
-import { reviewVerificationSchema, suspendUserSchema, reviewReportSchema, resolveSosSchema } from './admin.schemas.js';
+import { reviewVerificationSchema, reviewReportSchema, resolveSosSchema } from './admin.schemas.js';
 import { authenticate, requireRole } from '../../middleware/auth.js';
 import { validateRequest, paginationQuerySchema } from '../../plugins/validation.js';
 import { createSuccessResponse, createPaginatedResponse } from '../../utils/response.js';
@@ -93,33 +93,38 @@ export const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance): Pro
     }
   );
 
-  // POST /api/v1/admin/users/:id/suspend - Suspend user account
-  app.post(
-    '/users/:id/suspend',
-    {
-      preHandler: [authenticate, requireRole('admin')],
-      preValidation: [validateRequest({ body: suspendUserSchema })],
-    },
-    async (request, reply) => {
-      const { id } = request.params as { id: string };
-      const { reason } = request.body as { reason: string };
-      const result = await adminService.suspendUser(request.user!.id, id, reason);
-      return reply.status(200).send(createSuccessResponse(result));
-    }
-  );
+  // POST & PATCH /api/v1/admin/users/:id/suspend - Suspend user account
+  const handleSuspend = async (request: any, reply: any) => {
+    const { id } = request.params as { id: string };
+    const body = (request.body as { reason?: string }) || {};
+    const reason = body.reason || 'Moderator discretionary suspension.';
+    const result = await adminService.suspendUser(request.user!.id, id, reason);
+    return reply.status(200).send(createSuccessResponse(result));
+  };
+  app.post('/users/:id/suspend', { preHandler: [authenticate, requireRole('admin')] }, handleSuspend);
+  app.patch('/users/:id/suspend', { preHandler: [authenticate, requireRole('admin')] }, handleSuspend);
 
-  // POST /api/v1/admin/users/:id/unsuspend - Unsuspend user account
-  app.post(
-    '/users/:id/unsuspend',
-    {
-      preHandler: [authenticate, requireRole('admin')],
-    },
-    async (request, reply) => {
-      const { id } = request.params as { id: string };
-      const result = await adminService.unsuspendUser(request.user!.id, id);
-      return reply.status(200).send(createSuccessResponse(result));
+  // POST & PATCH /api/v1/admin/users/:id/unsuspend - Unsuspend user account
+  const handleUnsuspend = async (request: any, reply: any) => {
+    const { id } = request.params as { id: string };
+    const result = await adminService.unsuspendUser(request.user!.id, id);
+    return reply.status(200).send(createSuccessResponse(result));
+  };
+  app.post('/users/:id/unsuspend', { preHandler: [authenticate, requireRole('admin')] }, handleUnsuspend);
+  app.patch('/users/:id/unsuspend', { preHandler: [authenticate, requireRole('admin')] }, handleUnsuspend);
+
+  // POST & PATCH /api/v1/admin/users/:id/role - Update user role (student <-> admin)
+  const handleRoleChange = async (request: any, reply: any) => {
+    const { id } = request.params as { id: string };
+    const body = (request.body as { role: 'student' | 'admin' }) || {};
+    if (!body.role || (body.role !== 'student' && body.role !== 'admin')) {
+      return reply.status(400).send({ error: { message: "Role must be 'student' or 'admin'" } });
     }
-  );
+    const result = await adminService.updateUserRole(request.user!.id, id, body.role);
+    return reply.status(200).send(createSuccessResponse(result));
+  };
+  app.post('/users/:id/role', { preHandler: [authenticate, requireRole('admin')] }, handleRoleChange);
+  app.patch('/users/:id/role', { preHandler: [authenticate, requireRole('admin')] }, handleRoleChange);
 
   // GET /api/v1/admin/audit-logs - View admin audit logs
   app.get(
