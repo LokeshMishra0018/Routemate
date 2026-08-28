@@ -45,6 +45,10 @@ coverage/
 # Vitest
 .vitest/
 
-# Temp directories
+# Temp directories & scratch scripts
 scratch/
 tmp/
+backend/scripts/
+scripts/
+*.scratch.js
+*.scratch.mjs
