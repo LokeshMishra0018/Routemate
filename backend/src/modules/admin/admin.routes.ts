@@ -36,6 +36,29 @@ export const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance): Pro
     }
   );
 
+  // PATCH & POST /api/v1/admin/verifications/:id/approve - Direct Approve shortcut
+  const handleApprove = async (request: any, reply: any) => {
+    const { id } = request.params as { id: string };
+    const result = await adminService.reviewVerification(request.user!.id, id, { status: 'approved' });
+    return reply.status(200).send(createSuccessResponse(result));
+  };
+  app.patch('/verifications/:id/approve', { preHandler: [authenticate, requireRole('moderator', 'admin')] }, handleApprove);
+  app.post('/verifications/:id/approve', { preHandler: [authenticate, requireRole('moderator', 'admin')] }, handleApprove);
+
+  // PATCH & POST /api/v1/admin/verifications/:id/reject - Direct Reject shortcut
+  const handleReject = async (request: any, reply: any) => {
+    const { id } = request.params as { id: string };
+    const body = (request.body as { reason?: string; rejectionReason?: string }) || {};
+    const rejectionReason = body.reason || body.rejectionReason || 'Document could not be verified.';
+    const result = await adminService.reviewVerification(request.user!.id, id, {
+      status: 'rejected',
+      rejectionReason,
+    });
+    return reply.status(200).send(createSuccessResponse(result));
+  };
+  app.patch('/verifications/:id/reject', { preHandler: [authenticate, requireRole('moderator', 'admin')] }, handleReject);
+  app.post('/verifications/:id/reject', { preHandler: [authenticate, requireRole('moderator', 'admin')] }, handleReject);
+
   // GET /api/v1/admin/users - Search and list users
   app.get(
     '/users',

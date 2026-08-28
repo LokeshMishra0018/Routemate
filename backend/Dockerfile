@@ -7,18 +7,14 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install build dependencies
+# Install build dependencies for native modules
 RUN apk add --no-cache python3 make g++
 
-# Copy package manifests and Prisma schema
+# Copy package manifests
 COPY package*.json ./
-COPY prisma ./prisma/
 
-# Install all dependencies (including devDependencies for build/typecheck)
-RUN npm ci
-
-# Generate Prisma Client
-RUN npx prisma generate
+# Install dependencies
+RUN npm install
 
 # Copy source code and build config
 COPY tsconfig.json ./
@@ -40,6 +36,7 @@ WORKDIR /app
 # Set production environment
 ENV NODE_ENV=production
 ENV PORT=5000
+ENV HOST=0.0.0.0
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs && \
@@ -52,7 +49,9 @@ RUN apk add --no-cache curl
 COPY --from=builder --chown=nodejs:nodejs /app/package*.json ./
 COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
-COPY --from=builder --chown=nodejs:nodejs /app/prisma ./prisma
+
+# Create uploads directory with write permissions
+RUN mkdir -p /app/uploads/private && chown -R nodejs:nodejs /app/uploads
 
 # Switch to non-root user
 USER nodejs

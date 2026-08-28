@@ -39,7 +39,11 @@ export const AdminVerificationsPage: React.FC = () => {
   // 2. Approve Mutation
   const approveMutation = useMutation({
     mutationFn: async (id: string) => {
-      await apiClient.patch(`/admin/verifications/${id}/approve`);
+      try {
+        await apiClient.patch(`/admin/verifications/${id}/approve`);
+      } catch {
+        await apiClient.patch(`/admin/verifications/${id}`, { status: 'approved' });
+      }
     },
     onSuccess: () => {
       success('Verification Approved', 'Student ID verified and +30 trust points granted.');
@@ -54,7 +58,11 @@ export const AdminVerificationsPage: React.FC = () => {
   // 3. Reject Mutation
   const rejectMutation = useMutation({
     mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
-      await apiClient.patch(`/admin/verifications/${id}/reject`, { reason });
+      try {
+        await apiClient.patch(`/admin/verifications/${id}/reject`, { reason });
+      } catch {
+        await apiClient.patch(`/admin/verifications/${id}`, { status: 'rejected', rejectionReason: reason });
+      }
     },
     onSuccess: () => {
       success('Verification Rejected', 'Student notified of rejection reason.');

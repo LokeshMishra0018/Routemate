@@ -20,6 +20,17 @@ export const healthRoutes: FastifyPluginAsync = async (app: FastifyInstance): Pr
     );
   });
 
+  app.get('/healthz', async (_request, reply) => {
+    return reply.status(200).send(
+      createSuccessResponse({
+        status: 'healthy',
+        service: 'routemate-backend',
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString(),
+      })
+    );
+  });
+
   /**
    * GET /ready - Readiness probe
    * Returns 200 only when MongoDB is connected and ping succeeds.
