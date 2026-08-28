@@ -1,6 +1,16 @@
+import dns from 'node:dns';
 import nodemailer from 'nodemailer';
 import { EmailProvider, lastSentEmails } from './email.interface.js';
 import { getEnv } from '../../config/env.js';
+
+// Custom DNS lookup that strictly forces IPv4 resolution on cloud environments
+function ipv4Lookup(hostname: string, options: any, callback: any) {
+  if (typeof options === 'function') {
+    callback = options;
+    options = {};
+  }
+  return dns.lookup(hostname, { ...options, family: 4, all: false }, callback);
+}
 
 export class NodemailerEmailProvider implements EmailProvider {
   private transporter: nodemailer.Transporter | null = null;
@@ -26,6 +36,7 @@ export class NodemailerEmailProvider implements EmailProvider {
         host,
         port,
         secure,
+        lookup: ipv4Lookup,
         auth: {
           user: smtpUser,
           pass: smtpPass,
@@ -41,11 +52,11 @@ export class NodemailerEmailProvider implements EmailProvider {
   async verifyTransport(): Promise<boolean> {
     const env = getEnv();
     if (env.RESEND_API_KEY) {
-      console.log('[EMAIL][INIT] ✅ Resend HTTPS API configured (Port 443 - Render/Cloud guaranteed).');
+      console.log('[EMAIL][INIT] ✅ Resend HTTPS API configured (Port 443 - Cloud guaranteed).');
       return true;
     }
     if (env.BREVO_API_KEY) {
-      console.log('[EMAIL][INIT] ✅ Brevo HTTPS API configured (Port 443 - Render/Cloud guaranteed).');
+      console.log('[EMAIL][INIT] ✅ Brevo HTTPS API configured (Port 443 - Cloud guaranteed).');
       return true;
     }
 
@@ -57,11 +68,11 @@ export class NodemailerEmailProvider implements EmailProvider {
 
     try {
       await transporter.verify();
-      console.log('[EMAIL][INIT] ✅ SMTP transport verified successfully and connected to mail server.');
+      console.log('[EMAIL][INIT] ✅ SMTP IPv4 transport verified successfully and connected to Gmail server.');
       return true;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error('[EMAIL][INIT] ❌ SMTP transport verification note:', message);
+      console.error('[EMAIL][INIT] ❌ Primary SMTP transport verification failed:', message);
       return false;
     }
   }
@@ -199,7 +210,7 @@ export class NodemailerEmailProvider implements EmailProvider {
       if (sent) return;
     }
 
-    // 2. Try Nodemailer SMTP
+    // 2. Try Nodemailer SMTP with IPv4
     const transporter = this.getTransporter();
     if (!transporter) {
       console.warn('[EMAIL][WARN] No SMTP or HTTPS email provider active. Email logged to console.');
@@ -219,13 +230,14 @@ export class NodemailerEmailProvider implements EmailProvider {
       const msg = err instanceof Error ? err.message : String(err);
       console.error('[EMAIL][ERROR] Primary SMTP send failed:', msg);
 
-      // Automatic Fallback to Port 587 STARTTLS
+      // Automatic Fallback to Port 587 STARTTLS with IPv4
       if (env.SMTP_USER && env.SMTP_PASS) {
         try {
           const fallbackTransporter = nodemailer.createTransport({
             host: 'smtp.gmail.com',
             port: 587,
             secure: false,
+            lookup: ipv4Lookup,
             auth: {
               user: env.SMTP_USER.trim(),
               pass: env.SMTP_PASS.replace(/\s+/g, '').replace(/["']/g, '').trim(),
