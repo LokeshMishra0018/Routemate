@@ -17,6 +17,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Card } from '../../components/ui/Card';
 import { Badge, Avatar } from '../../components/ui/Badge';
+import { TrustBadge } from '../../components/common/TrustBadge';
 import { Modal } from '../../components/ui/Modal';
 import { TrustScoreMeter } from '../../components/ui/TrustScoreMeter';
 import { EmptyState, ErrorState, LoadingSpinner } from '../../components/ui/EmptyState';
@@ -114,16 +115,21 @@ export const AdminUsersPage: React.FC = () => {
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-3">
                       <Avatar
-                        name={u.fullName}
+                        name={u.fullName || u.email}
                         src={u.avatarUrl}
+                        size="md"
+                        role={u.role}
                         verified={u.verificationStatus === 'approved'}
                       />
                       <div>
-                        <h4 className="text-sm font-bold text-slate-100 flex items-center gap-1">
-                          {u.fullName || 'Student'}
-                          {u.verificationStatus === 'approved' && (
-                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                          )}
+                        <h4 className="text-sm font-bold text-slate-100 flex items-center gap-1.5">
+                          <span>{u.fullName || 'Student'}</span>
+                          <TrustBadge
+                            role={u.role}
+                            tier={u.verificationTier || (u.verificationStatus === 'approved' ? 'fully_verified' : 'partially_verified')}
+                            iconOnly
+                            size="xs"
+                          />
                         </h4>
                         <p className="text-xs text-slate-400 truncate max-w-[160px]">{u.email}</p>
                       </div>

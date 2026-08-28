@@ -1,11 +1,12 @@
 import React from 'react';
 
-export type VerificationTier = 'unverified' | 'partially_verified' | 'fully_verified';
+export type VerificationTier = 'unverified' | 'partially_verified' | 'fully_verified' | 'admin' | 'moderator';
 
 interface TrustBadgeProps {
   tier?: VerificationTier | string | null;
+  role?: string | null;
   /**
-   * If true, only renders the Twitter-style medallion icon (ideal for placing next to student names).
+   * If true, only renders the Twitter-style medallion icon (ideal for placing next to student/admin names).
    * If false, renders the full pill badge with icon and descriptive text.
    */
   iconOnly?: boolean;
@@ -16,23 +17,32 @@ interface TrustBadgeProps {
 
 /**
  * Twitter/X Style Scalloped Medallion Badge Component
- * - Fully Verified: Official Twitter Blue Scallop with White Checkmark Tick (✔)
+ * - Admin / Moderator: Twitter Gold Scallop with White Checkmark Tick (🌟)
+ * - Fully Verified: Twitter Blue Scallop with White Checkmark Tick (✔)
  * - Partially Verified: Amber / Yellow Scallop with White Clock / Hourglass (⏳)
  * - Unverified: Rose / Red Scallop with White Exclamation Mark (!)
  */
 export const TrustBadge: React.FC<TrustBadgeProps> = ({
   tier = 'partially_verified',
+  role,
   iconOnly = false,
   size = 'sm',
   className = '',
   showTooltip = true,
 }) => {
+  const isAdmin = role === 'admin' || tier === 'admin';
+  const isModerator = role === 'moderator' || tier === 'moderator';
+
   const normalizedTier: VerificationTier =
-    tier === 'fully_verified' || tier === 'approved'
-      ? 'fully_verified'
-      : tier === 'unverified'
-        ? 'unverified'
-        : 'partially_verified';
+    isAdmin
+      ? 'admin'
+      : isModerator
+        ? 'moderator'
+        : tier === 'fully_verified' || tier === 'approved'
+          ? 'fully_verified'
+          : tier === 'unverified'
+            ? 'unverified'
+            : 'partially_verified';
 
   // Sizing map for the SVG medallion icon
   const sizeClasses = {
@@ -48,6 +58,49 @@ export const TrustBadge: React.FC<TrustBadgeProps> = ({
     md: 'text-sm px-3 py-1.5 gap-2',
     lg: 'text-base px-4 py-2 gap-2.5',
   };
+
+  // 0. Admin & Moderator: Twitter Gold Scalloped Badge with White Checkmark Tick (🌟)
+  if (normalizedTier === 'admin' || normalizedTier === 'moderator') {
+    const titleText = normalizedTier === 'admin' ? 'Campus Administrator (Official)' : 'Campus Moderator (Official)';
+    const labelText = normalizedTier === 'admin' ? 'Campus Admin' : 'Campus Moderator';
+
+    const icon = (
+      <svg
+        viewBox="0 0 24 24"
+        aria-label={titleText}
+        className={`${sizeClasses[size]} inline-block flex-shrink-0 drop-shadow-[0_0_10px_rgba(234,179,8,0.7)] transition-transform hover:scale-110`}
+      >
+        {/* Scalloped Gold Medallion Background */}
+        <path
+          fill="#eab308"
+          d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.67-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.34 2.19c-1.39-.46-2.9-.2-3.91.81s-1.27 2.52-.81 3.91c-1.31.67-2.19 1.91-2.19 3.34s.88 2.67 2.19 3.34c-.46 1.39-.2 2.9.81 3.91s2.52 1.27 3.91.81c.67 1.31 1.91 2.19 3.34 2.19s2.67-.88 3.34-2.19c1.39.46 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34z"
+        />
+        {/* Crisp White Checkmark Tick */}
+        <path
+          fill="#ffffff"
+          d="M10.54 16.2L6.8 12.46l1.41-1.42 2.33 2.33 4.85-4.86 1.41 1.42-6.26 6.27z"
+        />
+      </svg>
+    );
+
+    if (iconOnly) {
+      return (
+        <span title={showTooltip ? titleText : undefined} className={`inline-flex items-center align-middle ${className}`}>
+          {icon}
+        </span>
+      );
+    }
+
+    return (
+      <span
+        title={showTooltip ? titleText : undefined}
+        className={`inline-flex items-center font-bold rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/40 backdrop-blur-md shadow-sm ${pillTextSizes[size]} ${className}`}
+      >
+        {icon}
+        <span>{labelText}</span>
+      </span>
+    );
+  }
 
   // 1. Fully Verified: Twitter Blue Scalloped Badge with White Checkmark Tick (✔)
   if (normalizedTier === 'fully_verified') {

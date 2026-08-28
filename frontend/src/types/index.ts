@@ -1,7 +1,7 @@
 export type UserRole = 'student' | 'moderator' | 'admin';
 export type UserStatus = 'active' | 'suspended' | 'deactivated';
 export type VerificationStatus = 'unverified' | 'pending' | 'approved' | 'rejected';
-export type VerificationTier = 'unverified' | 'partially_verified' | 'fully_verified';
+export type VerificationTier = 'unverified' | 'partially_verified' | 'fully_verified' | 'admin' | 'moderator';
 export type TransportType = 'train' | 'bus' | 'flight' | 'cab' | 'personal_vehicle' | 'other';
 export type TripStatus = 'planning' | 'confirmed' | 'upcoming' | 'travelling' | 'completed' | 'cancelled';
 export type ConnectionStatus = 'pending' | 'accepted' | 'declined' | 'cancelled';

@@ -182,19 +182,19 @@ export const VerificationPage: React.FC = () => {
         </Card>
       )}
 
-      {/* 3-Tier Trust Status Breakdown */}
+      {/* Trust Status Breakdown */}
       <Card className="glass-card border-slate-800 p-6 space-y-4">
         <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-indigo-400" /> Student Verification Tiers
+          <ShieldCheck className="w-4 h-4 text-indigo-400" /> Platform Verification Badges
         </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Tier 1: Red */}
           <div className="p-3.5 rounded-xl bg-rose-950/20 border border-rose-500/20 space-y-2">
             <div className="flex items-center gap-2">
               <TrustBadge tier="unverified" size="sm" />
             </div>
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              Account created, but college email OTP has not yet been verified. Restricted from booking carpools.
+              Account created, email OTP not yet verified.
             </p>
           </div>
 
@@ -204,7 +204,7 @@ export const VerificationPage: React.FC = () => {
               <TrustBadge tier="partially_verified" size="sm" />
             </div>
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              Email verified via OTP or Google. Can search rides, join carpools, and chat with classmates.
+              Email verified via OTP/Google. ID upload pending.
             </p>
           </div>
 
@@ -214,7 +214,17 @@ export const VerificationPage: React.FC = () => {
               <TrustBadge tier="fully_verified" size="sm" />
             </div>
             <p className="text-[11px] text-slate-300 leading-relaxed">
-              Physical College ID card approved by Admin. Unlocks the official <strong>Twitter-style Blue Tick</strong> badge everywhere!
+              College ID approved. <strong>Twitter Blue Tick</strong> unlocked!
+            </p>
+          </div>
+
+          {/* Tier 4: Gold (Admin) */}
+          <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/40 space-y-2">
+            <div className="flex items-center gap-2">
+              <TrustBadge role="admin" size="sm" />
+            </div>
+            <p className="text-[11px] text-amber-200/90 leading-relaxed">
+              Campus Staff / Admin. Official <strong>Twitter Gold Tick</strong>!
             </p>
           </div>
         </div>

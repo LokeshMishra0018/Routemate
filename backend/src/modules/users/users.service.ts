@@ -30,7 +30,7 @@ export class UsersService {
     const verificationStatus = profile?.verificationStatus || 'unverified';
     const emailVerified = user.emailVerifiedAt !== null;
     const { computeVerificationTier } = await import('./users.types.js');
-    const verificationTier = computeVerificationTier(emailVerified, verificationStatus);
+    const verificationTier = computeVerificationTier(emailVerified, verificationStatus, user.role);
 
     return {
       id: user._id.toHexString(),
@@ -116,7 +116,7 @@ export class UsersService {
     }
 
     const { computeVerificationTier } = await import('./users.types.js');
-    const verificationTier = computeVerificationTier(user.emailVerifiedAt !== null, profile.verificationStatus);
+    const verificationTier = computeVerificationTier(user.emailVerifiedAt !== null, profile.verificationStatus, user.role);
 
     return {
       id: user._id.toHexString(),

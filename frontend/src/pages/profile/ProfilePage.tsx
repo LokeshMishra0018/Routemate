@@ -112,17 +112,22 @@ export const ProfilePage: React.FC = () => {
               name={profile.fullName}
               src={profile.avatarUrl}
               size="xl"
+              role={isMyProfile ? currentUser?.role : undefined}
               verified={profile.verificationStatus === 'approved'}
             />
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-black text-white flex items-center gap-1.5">
                   {profile.fullName}
-                  {profile.verificationStatus === 'approved' && (
-                    <TrustBadge tier="fully_verified" iconOnly size="md" />
-                  )}
+                  <TrustBadge
+                    role={isMyProfile ? currentUser?.role : undefined}
+                    tier={profile.verificationTier || (profile.verificationStatus === 'approved' ? 'fully_verified' : 'partially_verified')}
+                    iconOnly
+                    size="md"
+                  />
                 </h1>
                 <TrustBadge
+                  role={isMyProfile ? currentUser?.role : undefined}
                   tier={profile.verificationTier || (profile.verificationStatus === 'approved' ? 'fully_verified' : 'partially_verified')}
                   size="sm"
                 />

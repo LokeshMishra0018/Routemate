@@ -3,12 +3,15 @@ import { ObjectId } from 'mongodb';
 export type UserRole = 'student' | 'moderator' | 'admin';
 export type UserStatus = 'active' | 'suspended' | 'deactivated';
 export type VerificationStatus = 'unverified' | 'pending' | 'approved' | 'rejected';
-export type VerificationTier = 'unverified' | 'partially_verified' | 'fully_verified';
+export type VerificationTier = 'unverified' | 'partially_verified' | 'fully_verified' | 'admin' | 'moderator';
 
 export function computeVerificationTier(
   emailVerified: boolean | Date | null | undefined,
-  verificationStatus: VerificationStatus | string | null | undefined
+  verificationStatus: VerificationStatus | string | null | undefined,
+  role?: UserRole | string | null
 ): VerificationTier {
+  if (role === 'admin') return 'admin';
+  if (role === 'moderator') return 'moderator';
   const isEmailVerified = Boolean(emailVerified);
   if (!isEmailVerified) {
     return 'unverified';

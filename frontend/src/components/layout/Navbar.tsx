@@ -115,11 +115,13 @@ export const Navbar: React.FC = () => {
                 name={profile?.fullName || user?.email}
                 src={profile?.avatarUrl}
                 size="sm"
+                role={user?.role}
                 verified={profile?.verificationStatus === 'approved'}
               />
               <span className="hidden md:inline-flex items-center gap-1 text-xs font-semibold text-slate-200 max-w-[120px] truncate">
                 <span className="truncate">{profile?.fullName || user?.email?.split('@')[0]}</span>
                 <TrustBadge
+                  role={user?.role}
                   tier={profile?.verificationTier || (profile?.verificationStatus === 'approved' ? 'fully_verified' : 'partially_verified')}
                   iconOnly
                   size="xs"
@@ -135,6 +137,7 @@ export const Navbar: React.FC = () => {
                   <div className="flex items-center justify-between gap-1">
                     <p className="text-xs font-bold text-slate-100 truncate">{profile?.fullName || 'Student'}</p>
                     <TrustBadge
+                      role={user?.role}
                       tier={profile?.verificationTier || (profile?.verificationStatus === 'approved' ? 'fully_verified' : 'partially_verified')}
                       size="xs"
                     />
