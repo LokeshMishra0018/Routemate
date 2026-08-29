@@ -344,13 +344,13 @@ const LeafletResizeHandler: React.FC<{ isVisible: boolean }> = ({ isVisible }) =
 };
 
 /**
- * Optional map click handler to pick coordinates by clicking directly on map
+ * Map click handler to pick coordinates by clicking directly on map using stable ref
  */
-const MapClickHandler: React.FC<{ onMapClick?: (lat: number, lng: number) => void }> = ({ onMapClick }) => {
+const MapClickHandler: React.FC<{ onMapClickRef: React.MutableRefObject<((lat: number, lng: number) => void) | undefined> }> = ({ onMapClickRef }) => {
   useMapEvents({
     click(e) {
-      if (onMapClick) {
-        onMapClick(e.latlng.lat, e.latlng.lng);
+      if (onMapClickRef.current) {
+        onMapClickRef.current(e.latlng.lat, e.latlng.lng);
       }
     },
   });
@@ -383,10 +383,15 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
   const googleLastFittedSignature = useRef<string>('');
   const lastCalculatedRouteSignature = useRef<string>('');
   const onRouteCalculatedRef = useRef(onRouteCalculated);
+  const onMapClickRef = useRef(onMapClick);
 
   useEffect(() => {
     onRouteCalculatedRef.current = onRouteCalculated;
   }, [onRouteCalculated]);
+
+  useEffect(() => {
+    onMapClickRef.current = onMapClick;
+  }, [onMapClick]);
 
   // Initialize Google Maps API Loader if Key is Present
   useEffect(() => {
@@ -488,13 +493,11 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
         mapTypeId: tileTheme === 'satellite' ? win.google.maps.MapTypeId.HYBRID : win.google.maps.MapTypeId.ROADMAP,
       });
 
-      if (onMapClick) {
-        googleMapInstance.current.addListener('click', (e: any) => {
-          if (e.latLng) {
-            onMapClick(e.latLng.lat(), e.latLng.lng());
-          }
-        });
-      }
+      googleMapInstance.current.addListener('click', (e: any) => {
+        if (e.latLng && onMapClickRef.current) {
+          onMapClickRef.current(e.latLng.lat(), e.latLng.lng());
+        }
+      });
     } else {
       const map = googleMapInstance.current;
       map.setOptions({
@@ -817,7 +820,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
             routeCoords={routeResult?.coordinates || []}
           />
 
-          <MapClickHandler onMapClick={onMapClick} />
+          <MapClickHandler onMapClickRef={onMapClickRef} />
 
           {/* User Live Location Beacon */}
           {userLocation && (

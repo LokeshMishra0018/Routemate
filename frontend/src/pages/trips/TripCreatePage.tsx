@@ -290,7 +290,7 @@ export const TripCreatePage: React.FC = () => {
         {/* Left Column: Trip Details Form (7 cols) */}
         <form onSubmit={handleSubmit} className="lg:col-span-7 space-y-6">
           {/* 1. Origin & Destination Route Card */}
-          <Card className="glass-card overflow-visible">
+          <Card className="glass-card overflow-visible relative z-30">
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-base font-bold flex items-center gap-2">
@@ -493,12 +493,12 @@ export const TripCreatePage: React.FC = () => {
                 </div>
 
                 {stops.length > 0 && (
-                  <div className="space-y-3">
+                  <div className="space-y-3 overflow-visible relative z-20">
                     {stops.map((stop, idx) => (
                       <div
                         key={idx}
                         className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2 relative"
-                        style={{ zIndex: 40 - idx }}
+                        style={{ zIndex: 60 - idx }}
                       >
                         {/* Stop Header */}
                         <div className="flex items-center justify-between">
@@ -564,7 +564,7 @@ export const TripCreatePage: React.FC = () => {
           </Card>
 
           {/* 2. Capacity & Cost Splitting Card */}
-          <Card className="glass-card">
+          <Card className="glass-card relative z-10">
             <CardHeader>
               <CardTitle className="text-base font-bold flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-indigo-400" /> Seats & Travel Preferences
