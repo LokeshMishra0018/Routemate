@@ -569,7 +569,7 @@ export const TripCreatePage: React.FC = () => {
               {/* Main Interactive Map Component */}
               <TripRouteMap
                 waypoints={mapWaypoints}
-                className="h-[380px] w-full rounded-xl"
+                className="h-[440px] w-full rounded-xl"
                 showStatsHud={true}
                 onRouteCalculated={(stats) => setRouteStats(stats)}
               />
