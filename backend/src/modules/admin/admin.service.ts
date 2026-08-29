@@ -1619,6 +1619,8 @@ export class AdminService {
       .limit(limit)
       .toArray();
 
+    const { presenceStore } = await import('../../lib/presence.js');
+
     const items = await Promise.all(
       sessions.map(async (s) => {
         let user = null;
@@ -1632,6 +1634,7 @@ export class AdminService {
 
         const deviceInfoStr = s.deviceInfo || 'Web Browser';
         const isGoogle = deviceInfoStr.toLowerCase().includes('google');
+        const isOnline = presenceStore.getUserPresence(s.userId).length > 0;
 
         return {
           sessionId: s._id.toHexString(),
@@ -1648,6 +1651,7 @@ export class AdminService {
           loginAt: s.createdAt,
           lastUsedAt: s.lastUsedAt || s.createdAt,
           isRevoked: Boolean(s.revokedAt),
+          isOnline,
         };
       })
     );

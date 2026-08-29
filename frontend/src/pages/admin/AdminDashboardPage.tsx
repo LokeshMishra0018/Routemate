@@ -51,6 +51,7 @@ export interface RecentLoginRecord {
   loginAt: string;
   lastUsedAt: string;
   isRevoked: boolean;
+  isOnline?: boolean;
 }
 
 function formatTimeAgo(isoString: string): string {
@@ -372,69 +373,102 @@ export const AdminDashboardPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Highlighted Banner: The Very Last Logged In User */}
-        {latestLogin && (
-          <div className="p-4 rounded-xl bg-gradient-to-r from-indigo-950/60 via-slate-900 to-indigo-950/40 border border-indigo-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-3.5">
-              <div className="relative">
-                <img
-                  src={latestLogin.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(latestLogin.email)}`}
-                  alt={latestLogin.fullName}
-                  className="w-12 h-12 rounded-xl object-cover border border-slate-700 bg-slate-950"
-                />
-                <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-slate-950" title="Active Session" />
-              </div>
-
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-bold text-white">{latestLogin.fullName}</span>
-                  {latestLogin.role === 'admin' ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
-                      <Crown className="w-3 h-3" /> Admin
-                    </span>
-                  ) : latestLogin.verificationStatus === 'approved' ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-bold">
-                      <ShieldCheck className="w-3 h-3 text-sky-400" /> Verified Student (Blue Tick)
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
-                      🟡 ID Pending
-                    </span>
-                  )}
-                </div>
-                <div className="text-xs text-slate-400 mt-0.5 font-mono">{latestLogin.email}</div>
-              </div>
+        {/* Highlighted Banner: All Currently Active & Recently Logged In Commuters */}
+        {recentLogins && recentLogins.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                Active Commuters on Platform
+              </span>
+              <span className="text-[10px] text-slate-500 font-mono">
+                {(() => {
+                  const seen = new Set(recentLogins.map(r => r.userId));
+                  return `${seen.size} Distinct Active Users`;
+                })()}
+              </span>
             </div>
 
-            <div className="flex items-center gap-4 text-xs text-slate-300 flex-wrap md:justify-end">
-              <div className="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 px-3 py-1.5 rounded-lg">
-                {latestLogin.authMethod === 'google' ? (
-                  <>
-                    <Globe className="w-3.5 h-3.5 text-rose-400" />
-                    <span className="font-semibold text-rose-300">Google OAuth</span>
-                  </>
-                ) : (
-                  <>
-                    <Lock className="w-3.5 h-3.5 text-indigo-400" />
-                    <span className="font-semibold text-indigo-300">Email + Password</span>
-                  </>
-                )}
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {(() => {
+                const seenUserIds = new Set<string>();
+                const uniqueList: RecentLoginRecord[] = [];
+                for (const r of recentLogins) {
+                  if (!seenUserIds.has(r.userId)) {
+                    seenUserIds.add(r.userId);
+                    uniqueList.push(r);
+                  }
+                }
+                return uniqueList.slice(0, 4).map((commuter) => (
+                  <div
+                    key={commuter.sessionId}
+                    className="p-4 rounded-xl bg-gradient-to-r from-indigo-950/60 via-slate-900 to-indigo-950/40 border border-indigo-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all hover:border-indigo-500/60"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <img
+                          src={
+                            commuter.avatarUrl ||
+                            `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(commuter.email)}`
+                          }
+                          alt={commuter.fullName}
+                          className="w-11 h-11 rounded-xl object-cover border border-slate-700 bg-slate-950"
+                        />
+                        <span
+                          className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full ring-2 ring-slate-950 ${
+                            commuter.isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-emerald-500'
+                          }`}
+                          title={commuter.isOnline ? 'Connected Online Now' : 'Active Session'}
+                        />
+                      </div>
 
-              <div className="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 px-3 py-1.5 rounded-lg">
-                <Laptop className="w-3.5 h-3.5 text-slate-400" />
-                <span className="text-slate-300 truncate max-w-[160px]">{latestLogin.deviceInfo}</span>
-              </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-bold text-white">{commuter.fullName}</span>
+                          {commuter.role === 'admin' ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[9px] font-bold">
+                              <Crown className="w-2.5 h-2.5" /> Admin
+                            </span>
+                          ) : commuter.verificationStatus === 'approved' ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[9px] font-bold">
+                              <ShieldCheck className="w-2.5 h-2.5 text-sky-400" /> Blue Tick
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[9px] font-bold">
+                              🟡 ID Pending
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-400 font-mono truncate max-w-[200px] mt-0.5">
+                          {commuter.email}
+                        </div>
+                      </div>
+                    </div>
 
-              <div className="text-right">
-                <div className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 justify-end">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                  Last Login: {formatTimeAgo(latestLogin.loginAt)}
-                </div>
-                <div className="text-[10px] text-slate-500">
-                  {new Date(latestLogin.loginAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} • {new Date(latestLogin.loginAt).toLocaleDateString()}
-                </div>
-              </div>
+                    <div className="flex flex-col sm:items-end gap-1 text-xs">
+                      <div className="flex items-center gap-2">
+                        {commuter.authMethod === 'google' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-500/10 text-rose-300 border border-rose-500/20 text-[10px] font-semibold">
+                            <Globe className="w-3 h-3 text-rose-400" /> Google OAuth
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 text-[10px] font-semibold">
+                            <Lock className="w-3 h-3 text-indigo-400" /> Email/OTP
+                          </span>
+                        )}
+                        <span className="text-[10px] text-slate-400 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800 font-mono">
+                          {commuter.trustScore} pts
+                        </span>
+                      </div>
+
+                      <div className="text-[11px] font-bold text-emerald-400 flex items-center gap-1 mt-0.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                        {commuter.isOnline ? 'Online Now' : `Logged in ${formatTimeAgo(commuter.loginAt)}`}
+                      </div>
+                    </div>
+                  </div>
+                ));
+              })()}
             </div>
           </div>
         )}
