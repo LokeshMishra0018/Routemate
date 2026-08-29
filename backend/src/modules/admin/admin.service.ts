@@ -8,6 +8,7 @@ import { ReviewVerificationInput } from './admin.types.js';
 import type { ReportCategory, ReportStatus, SosStatus, ReportDocument } from '../safety/safety.types.js';
 import { collegesService } from '../colleges/colleges.service.js';
 import { getStorageProvider } from '../../lib/storage/storage.interface.js';
+import { ObjectId } from 'mongodb';
 import { getDb } from '../../db/mongo.js';
 import { COLLECTIONS } from '../../db/collections.js';
 
@@ -1625,22 +1626,29 @@ export class AdminService {
       sessions.map(async (s) => {
         let user = null;
         let profile = null;
+        const uid = String(s.userId);
         try {
-          user = await usersRepository.findUserById(s.userId);
-          profile = await usersRepository.findProfileByUserId(s.userId);
+          user = await usersRepository.findUserById(uid);
+          if (!user && ObjectId.isValid(uid)) {
+            user = (await db.collection(COLLECTIONS.USERS).findOne({ _id: new ObjectId(uid) })) as any;
+          }
+          profile = await usersRepository.findProfileByUserId(uid);
+          if (!profile && user) {
+            profile = (await db.collection(COLLECTIONS.PROFILES).findOne({ userId: user._id.toHexString() })) as any;
+          }
         } catch {
           // ignore lookup errors
         }
 
         const deviceInfoStr = s.deviceInfo || 'Web Browser';
         const isGoogle = deviceInfoStr.toLowerCase().includes('google');
-        const isOnline = presenceStore.getUserPresence(s.userId).length > 0;
+        const isOnline = presenceStore.getUserPresence(uid).length > 0;
 
         return {
           sessionId: s._id.toHexString(),
-          userId: s.userId,
-          email: user?.email || 'Unknown User',
-          fullName: profile?.fullName || user?.email?.split('@')[0] || 'Unknown User',
+          userId: uid,
+          email: user?.email || (profile as any)?.email || 'student@kiet.edu',
+          fullName: profile?.fullName || user?.email?.split('@')[0] || 'Campus Student',
           avatarUrl: profile?.avatarUrl || null,
           role: user?.role || 'student',
           verificationStatus: profile?.verificationStatus || 'unverified',

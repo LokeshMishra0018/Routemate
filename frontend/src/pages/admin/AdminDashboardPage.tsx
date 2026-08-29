@@ -373,38 +373,51 @@ export const AdminDashboardPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Highlighted Banner: All Currently Active & Recently Logged In Commuters */}
-        {recentLogins && recentLogins.length > 0 && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                Active Commuters on Platform
-              </span>
-              <span className="text-[10px] text-slate-500 font-mono">
-                {(() => {
-                  const seen = new Set(recentLogins.map(r => r.userId));
-                  return `${seen.size} Distinct Active Users`;
-                })()}
-              </span>
-            </div>
+        {/* Highlighted Banner: Currently Active / Online Commuters */}
+        {recentLogins && recentLogins.length > 0 && (() => {
+          const seen = new Set<string>();
+          const uniqueRecent: RecentLoginRecord[] = [];
+          for (const r of recentLogins) {
+            if (!seen.has(r.userId)) {
+              seen.add(r.userId);
+              uniqueRecent.push(r);
+            }
+          }
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {(() => {
-                const seenUserIds = new Set<string>();
-                const uniqueList: RecentLoginRecord[] = [];
-                for (const r of recentLogins) {
-                  if (!seenUserIds.has(r.userId)) {
-                    seenUserIds.add(r.userId);
-                    uniqueList.push(r);
-                  }
-                }
-                return uniqueList.slice(0, 4).map((commuter) => (
+          // Select strictly online users, or fallback to the single most recent login if none are online
+          const onlineUsers = uniqueRecent.filter(r => r.isOnline);
+          const displayUsers = onlineUsers.length > 0 ? onlineUsers : uniqueRecent.slice(0, 1);
+
+          return (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                  {onlineUsers.length > 0 ? (
+                    <>
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                      <span className="text-emerald-400 font-bold">
+                        {onlineUsers.length} Commuter{onlineUsers.length > 1 ? 's' : ''} Online Right Now
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="w-2 h-2 rounded-full bg-slate-500" />
+                      <span>Most Recent Session</span>
+                    </>
+                  )}
+                </span>
+                <span className="text-[10px] text-slate-500 font-mono">
+                  {onlineUsers.length} Active Socket{onlineUsers.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                {displayUsers.map((commuter) => (
                   <div
                     key={commuter.sessionId}
-                    className="p-4 rounded-xl bg-gradient-to-r from-indigo-950/60 via-slate-900 to-indigo-950/40 border border-indigo-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all hover:border-indigo-500/60"
+                    className="p-4 rounded-xl bg-gradient-to-r from-indigo-950/60 via-slate-900 to-indigo-950/40 border border-indigo-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all hover:border-indigo-500/60"
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3.5">
                       <div className="relative">
                         <img
                           src={
@@ -412,13 +425,15 @@ export const AdminDashboardPage: React.FC = () => {
                             `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(commuter.email)}`
                           }
                           alt={commuter.fullName}
-                          className="w-11 h-11 rounded-xl object-cover border border-slate-700 bg-slate-950"
+                          className="w-12 h-12 rounded-xl object-cover border border-slate-700 bg-slate-950"
                         />
                         <span
                           className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full ring-2 ring-slate-950 ${
-                            commuter.isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-emerald-500'
+                            commuter.isOnline
+                              ? 'bg-emerald-400 ring-emerald-950 animate-pulse'
+                              : 'bg-slate-600 ring-slate-900'
                           }`}
-                          title={commuter.isOnline ? 'Connected Online Now' : 'Active Session'}
+                          title={commuter.isOnline ? 'Connected Online Now' : 'Offline Session'}
                         />
                       </div>
 
@@ -426,52 +441,66 @@ export const AdminDashboardPage: React.FC = () => {
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-bold text-white">{commuter.fullName}</span>
                           {commuter.role === 'admin' ? (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[9px] font-bold">
-                              <Crown className="w-2.5 h-2.5" /> Admin
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
+                              <Crown className="w-3 h-3" /> Admin
                             </span>
                           ) : commuter.verificationStatus === 'approved' ? (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[9px] font-bold">
-                              <ShieldCheck className="w-2.5 h-2.5 text-sky-400" /> Blue Tick
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-bold">
+                              <ShieldCheck className="w-3 h-3 text-sky-400" /> Verified Student (Blue Tick)
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[9px] font-bold">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
                               🟡 ID Pending
                             </span>
                           )}
                         </div>
-                        <div className="text-xs text-slate-400 font-mono truncate max-w-[200px] mt-0.5">
-                          {commuter.email}
+                        <div className="text-xs text-slate-400 mt-0.5 font-mono">{commuter.email}</div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 text-xs text-slate-300 flex-wrap md:justify-end">
+                      <div className="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 px-3 py-1.5 rounded-lg">
+                        {commuter.authMethod === 'google' ? (
+                          <>
+                            <Globe className="w-3.5 h-3.5 text-rose-400" />
+                            <span className="font-semibold text-rose-300">Google OAuth</span>
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="w-3.5 h-3.5 text-indigo-400" />
+                            <span className="font-semibold text-indigo-300">Email + Password</span>
+                          </>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 px-3 py-1.5 rounded-lg">
+                        <Laptop className="w-3.5 h-3.5 text-slate-400" />
+                        <span className="text-slate-300 truncate max-w-[160px]">{commuter.deviceInfo}</span>
+                      </div>
+
+                      <div className="text-right">
+                        {commuter.isOnline ? (
+                          <div className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 justify-end">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                            Online Right Now
+                          </div>
+                        ) : (
+                          <div className="text-xs font-bold text-slate-400 flex items-center gap-1.5 justify-end">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                            Last Login: {formatTimeAgo(commuter.loginAt)}
+                          </div>
+                        )}
+                        <div className="text-[10px] text-slate-500">
+                          {new Date(commuter.loginAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} • {new Date(commuter.loginAt).toLocaleDateString()}
                         </div>
                       </div>
                     </div>
-
-                    <div className="flex flex-col sm:items-end gap-1 text-xs">
-                      <div className="flex items-center gap-2">
-                        {commuter.authMethod === 'google' ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-500/10 text-rose-300 border border-rose-500/20 text-[10px] font-semibold">
-                            <Globe className="w-3 h-3 text-rose-400" /> Google OAuth
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 text-[10px] font-semibold">
-                            <Lock className="w-3 h-3 text-indigo-400" /> Email/OTP
-                          </span>
-                        )}
-                        <span className="text-[10px] text-slate-400 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800 font-mono">
-                          {commuter.trustScore} pts
-                        </span>
-                      </div>
-
-                      <div className="text-[11px] font-bold text-emerald-400 flex items-center gap-1 mt-0.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                        {commuter.isOnline ? 'Online Now' : `Logged in ${formatTimeAgo(commuter.loginAt)}`}
-                      </div>
-                    </div>
                   </div>
-                ));
-              })()}
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Recent Logins Table */}
         <div className="overflow-x-auto rounded-xl border border-slate-800">
@@ -504,13 +533,28 @@ export const AdminDashboardPage: React.FC = () => {
                   <tr key={item.sessionId || idx} className="hover:bg-slate-900/60 transition-colors">
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2.5">
-                        <img
-                          src={item.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(item.email)}`}
-                          alt={item.fullName}
-                          className="w-7 h-7 rounded-lg object-cover bg-slate-900 border border-slate-700"
-                        />
+                        <div className="relative">
+                          <img
+                            src={item.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(item.email)}`}
+                            alt={item.fullName}
+                            className="w-7 h-7 rounded-lg object-cover bg-slate-900 border border-slate-700"
+                          />
+                          {item.isOnline && (
+                            <span
+                              className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 ring-1 ring-slate-950 animate-pulse"
+                              title="Online Now"
+                            />
+                          )}
+                        </div>
                         <div>
-                          <div className="font-bold text-slate-200">{item.fullName}</div>
+                          <div className="font-bold text-slate-200 flex items-center gap-1.5">
+                            <span>{item.fullName}</span>
+                            {item.isOnline && (
+                              <span className="text-[9px] px-1 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                                Live
+                              </span>
+                            )}
+                          </div>
                           <div className="text-[11px] text-slate-400 font-mono">{item.email}</div>
                         </div>
                       </div>
