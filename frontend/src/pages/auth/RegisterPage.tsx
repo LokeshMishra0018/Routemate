@@ -122,7 +122,7 @@ export const RegisterPage: React.FC = () => {
         <form onSubmit={handleSubmit} className="space-y-3.5">
           <Input
             label="Full Name"
-            placeholder="Aarav Sharma"
+            placeholder="Lokesh Mishra"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
             leftIcon={<User className="w-4 h-4" />}
@@ -140,7 +140,7 @@ export const RegisterPage: React.FC = () => {
           <Input
             label="Institutional Email (@kiet.edu)"
             type="email"
-            placeholder="aarav.sharma@kiet.edu"
+            placeholder="lokesh.mishra@kiet.edu"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             leftIcon={<Mail className="w-4 h-4" />}

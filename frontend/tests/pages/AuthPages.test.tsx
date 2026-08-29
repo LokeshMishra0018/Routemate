@@ -59,8 +59,8 @@ describe('Auth Feature Pages Test Suite', () => {
       );
 
       expect(screen.getByText('Join RouteMate')).toBeInTheDocument();
-      expect(screen.getByPlaceholderText('Aarav Sharma')).toBeInTheDocument();
-      expect(screen.getByPlaceholderText('aarav.sharma@kiet.edu')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('Lokesh Mishra')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('lokesh.mishra@kiet.edu')).toBeInTheDocument();
 
       await waitFor(() => {
         expect(apiClient.get).toHaveBeenCalledWith('/colleges');
@@ -118,7 +118,7 @@ describe('Auth Feature Pages Test Suite', () => {
             profile: {
               id: 'p1',
               userId: 'u1',
-              fullName: 'Aarav Student',
+              fullName: 'Lokesh Mishra',
               collegeId: 'kiet',
               academicYear: 2,
               gender: 'male',
@@ -149,7 +149,7 @@ describe('Auth Feature Pages Test Suite', () => {
       );
 
       expect(screen.getByText('Student Onboarding')).toBeInTheDocument();
-      expect(screen.getByDisplayValue('Aarav Student')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('Lokesh Mishra')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Finish & Explore Campus Trips/i })).toBeInTheDocument();
     });
   });

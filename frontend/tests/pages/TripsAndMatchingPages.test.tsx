@@ -29,7 +29,7 @@ const mockAuthValue = {
   profile: {
     id: 'p1',
     userId: 'u1',
-    fullName: 'Aarav Sharma',
+    fullName: 'Lokesh Mishra',
     collegeId: 'kiet-1',
     collegeName: 'KIET Campus Network',
     academicYear: 3,
@@ -103,7 +103,7 @@ describe('Trips & Matching Feature Tests', () => {
         </QueryClientProvider>
       );
 
-      expect(screen.getByText(/Hello, Aarav Sharma/i)).toBeInTheDocument();
+      expect(screen.getByText(/Hello, Lokesh Mishra/i)).toBeInTheDocument();
       expect(screen.getByText('KIET Campus Network')).toBeInTheDocument();
       expect(screen.getByText('Official ID Verified')).toBeInTheDocument();
 
