@@ -31,10 +31,12 @@ import { Select, Textarea } from '../../components/ui/Select';
 import { EmptyState, ErrorState, LoadingSpinner } from '../../components/ui/EmptyState';
 
 const CAMPUS_BRANCHES = [
+  { value: 'Computer Science (CS)', label: 'Computer Science (CS)' },
   { value: 'Computer Science & Engineering (CSE)', label: 'Computer Science & Engineering (CSE)' },
   { value: 'Information Technology (IT)', label: 'Information Technology (IT)' },
   { value: 'Computer Science & AI / ML (CS-AIML)', label: 'Computer Science & AI / ML (CS-AIML)' },
   { value: 'Computer Science & Data Science (CS-DS)', label: 'Computer Science & Data Science (CS-DS)' },
+  { value: 'Computer Science & Information Technology (CSIT)', label: 'Computer Science & Information Technology (CSIT)' },
   { value: 'Electronics & Communication (ECE)', label: 'Electronics & Communication (ECE)' },
   { value: 'Electrical & Electronics Engineering (EEE)', label: 'Electrical & Electronics Engineering (EEE)' },
   { value: 'Mechanical Engineering (ME)', label: 'Mechanical Engineering (ME)' },
@@ -471,10 +473,10 @@ export const ProfilePage: React.FC = () => {
               value={editAcademicYear}
               onChange={(e) => setEditAcademicYear(Number(e.target.value))}
               options={[
-                { value: 1, label: '1' },
-                { value: 2, label: '2' },
-                { value: 3, label: '3' },
-                { value: 4, label: '4' },
+                { value: 1, label: '1st Year' },
+                { value: 2, label: '2nd Year' },
+                { value: 3, label: '3rd Year' },
+                { value: 4, label: '4th Year' },
               ]}
             />
 
