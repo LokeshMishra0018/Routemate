@@ -220,7 +220,7 @@ export const InteractiveTrendCurve: React.FC<InteractiveTrendCurveProps> = ({
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              1 Hour (5m steps)
+              1 Hour
             </button>
             <button
               type="button"
