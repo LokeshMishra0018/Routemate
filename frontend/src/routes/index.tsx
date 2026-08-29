@@ -44,8 +44,15 @@ import { AdminVerificationsPage } from '../pages/admin/AdminVerificationsPage';
 import { AdminReportsPage } from '../pages/admin/AdminReportsPage';
 import { AdminSosPage } from '../pages/admin/AdminSosPage';
 import { AdminUsersPage } from '../pages/admin/AdminUsersPage';
+// Overview & Landing Page
+import { LandingPage } from '../pages/LandingPage';
 
 export const router = createBrowserRouter([
+  // Public Overview / Introduction Page
+  { path: '/', element: <LandingPage /> },
+  { path: '/overview', element: <LandingPage /> },
+  { path: '/about', element: <LandingPage /> },
+
   // Public / Auth Routes
   {
     element: <AuthLayout />,
@@ -79,7 +86,6 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
     children: [
-      { index: true, element: <Navigate to="/dashboard" replace /> },
       { path: 'dashboard', element: <DashboardPage /> },
       { path: 'trips', element: <TripsListPage /> },
       { path: 'trips/new', element: <TripCreatePage /> },
