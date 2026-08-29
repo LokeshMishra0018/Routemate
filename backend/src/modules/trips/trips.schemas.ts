@@ -1,15 +1,23 @@
 import { z } from 'zod';
 
 export const geoPointSchema = z
-  .object({
-    type: z.literal('Point').default('Point'),
-    coordinates: z
-      .tuple([
-        z.number().min(-180, 'Longitude must be >= -180').max(180, 'Longitude must be <= 180'),
-        z.number().min(-90, 'Latitude must be >= -90').max(90, 'Latitude must be <= 90'),
-      ])
-      .default([77.4977, 28.7532]),
-  })
+  .preprocess(
+    (val) => {
+      if (Array.isArray(val) && val.length === 2 && typeof val[0] === 'number' && typeof val[1] === 'number') {
+        return { type: 'Point', coordinates: val };
+      }
+      return val;
+    },
+    z.object({
+      type: z.literal('Point').default('Point'),
+      coordinates: z
+        .tuple([
+          z.number().min(-180, 'Longitude must be >= -180').max(180, 'Longitude must be <= 180'),
+          z.number().min(-90, 'Latitude must be >= -90').max(90, 'Latitude must be <= 90'),
+        ])
+        .default([77.4977, 28.7532]),
+    })
+  )
   .default({ type: 'Point', coordinates: [77.4977, 28.7532] });
 
 export const locationPointSchema = z.object({
@@ -43,26 +51,63 @@ const meetingPointSchema = z.object({
   notes: z.string().max(300).trim().nullable().optional(),
 });
 
-export const createTripSchema = z.object({
-  source: locationPointSchema,
-  destination: locationPointSchema,
-  travelDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
-    .refine((dateStr) => {
-      const today = new Date().toISOString().split('T')[0];
-      return dateStr >= today;
-    }, 'Travel date cannot be in the past'),
-  departureTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Time must be in 24-hour HH:MM format'),
-  estimatedArrivalTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Time must be in 24-hour HH:MM format').nullable().optional(),
-  transportType: z.enum(['train', 'bus', 'flight', 'cab', 'personal_vehicle', 'other']),
-  stops: z.array(tripStopSchema).default([]),
-  preferences: tripPreferencesSchema.default({ genderPreference: 'any' }),
-  costSharing: costSharingSchema.default({ enabled: false }),
-  availableSeats: z.number().int().min(1).max(20).default(1),
-  notes: z.string().max(1000).trim().nullable().optional(),
-  meetingPoint: meetingPointSchema.nullable().optional(),
-});
+export const createTripSchema = z.preprocess(
+  (raw: any) => {
+    if (typeof raw !== 'object' || raw === null) return raw;
+    const copy = { ...raw };
+
+    // 1. If intermediateStops was sent instead of stops
+    if (!copy.stops && Array.isArray(copy.intermediateStops)) {
+      copy.stops = copy.intermediateStops;
+    }
+
+    // 2. If departureTime is an ISO string like "2026-08-30T09:00:00.000Z", extract travelDate & departureTime
+    if (typeof copy.departureTime === 'string' && copy.departureTime.includes('T')) {
+      const d = new Date(copy.departureTime);
+      if (!isNaN(d.getTime())) {
+        if (!copy.travelDate) {
+          copy.travelDate = d.toISOString().split('T')[0];
+        }
+        const hrs = String(d.getUTCHours()).padStart(2, '0');
+        const mins = String(d.getUTCMinutes()).padStart(2, '0');
+        copy.departureTime = `${hrs}:${mins}`;
+      }
+    }
+
+    // 3. Fallback travelDate to tomorrow if missing
+    if (!copy.travelDate) {
+      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      copy.travelDate = tomorrow.toISOString().split('T')[0];
+    }
+
+    // 4. Normalize transportType
+    if (copy.transportType === 'carpool') copy.transportType = 'personal_vehicle';
+    if (copy.transportType === 'auto') copy.transportType = 'other';
+    if (copy.transportType === 'metro_walk') copy.transportType = 'train';
+
+    return copy;
+  },
+  z.object({
+    source: locationPointSchema,
+    destination: locationPointSchema,
+    travelDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
+      .refine((dateStr) => {
+        const today = new Date().toISOString().split('T')[0];
+        return dateStr >= today;
+      }, 'Travel date cannot be in the past'),
+    departureTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Time must be in 24-hour HH:MM format'),
+    estimatedArrivalTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Time must be in 24-hour HH:MM format').nullable().optional(),
+    transportType: z.enum(['train', 'bus', 'flight', 'cab', 'personal_vehicle', 'other']),
+    stops: z.array(tripStopSchema).default([]),
+    preferences: tripPreferencesSchema.default({ genderPreference: 'any' }),
+    costSharing: costSharingSchema.default({ enabled: false }),
+    availableSeats: z.number().int().min(1).max(20).default(1),
+    notes: z.string().max(1000).trim().nullable().optional(),
+    meetingPoint: meetingPointSchema.nullable().optional(),
+  })
+);
 
 export const updateTripSchema = z.object({
   source: locationPointSchema.optional(),
