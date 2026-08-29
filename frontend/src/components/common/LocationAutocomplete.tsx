@@ -263,13 +263,19 @@ export const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
             type="button"
             onClick={handleUseCurrentLocation}
             disabled={disabled || isLocating}
-            className="p-1.5 rounded-lg text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 border border-indigo-500/20 transition flex items-center gap-1 text-xs"
-            title="Use current GPS location"
+            className="px-2 py-1.5 rounded-lg text-indigo-300 hover:text-white bg-indigo-500/10 hover:bg-indigo-600/30 border border-indigo-500/30 transition-all flex items-center gap-1.5 text-xs font-medium shadow-sm active:scale-95"
+            title="Auto-detect current GPS location"
           >
             {isLocating ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-400" />
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-400" />
+                <span className="hidden sm:inline text-[11px]">Locating...</span>
+              </>
             ) : (
-              <Navigation className="h-3.5 w-3.5" />
+              <>
+                <Navigation className="h-3.5 w-3.5 text-indigo-400" />
+                <span className="hidden sm:inline text-[11px]">GPS</span>
+              </>
             )}
           </button>
         </div>
@@ -277,7 +283,28 @@ export const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
 
       {/* Autocomplete Dropdown Menu */}
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-slate-900/95 border border-slate-800/90 rounded-xl shadow-2xl backdrop-blur-xl max-h-64 overflow-y-auto divide-y divide-slate-800/50 animate-in fade-in slide-in-from-top-1 duration-150">
+        <div className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-slate-900/95 border border-slate-800/90 rounded-xl shadow-2xl backdrop-blur-xl max-h-72 overflow-y-auto divide-y divide-slate-800/50 animate-in fade-in slide-in-from-top-1 duration-150">
+          {/* Top Quick-Action: Current GPS Location */}
+          <button
+            type="button"
+            onClick={handleUseCurrentLocation}
+            disabled={isLocating}
+            className="w-full text-left p-2.5 flex items-center gap-2.5 bg-indigo-950/40 hover:bg-indigo-900/60 text-indigo-200 border-b border-indigo-500/20 transition-colors"
+          >
+            <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-300 shrink-0">
+              {isLocating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Navigation className="h-4 w-4" />}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-indigo-200">📍 Use My Current Location</span>
+                <span className="text-[10px] uppercase font-bold px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300">
+                  GPS Auto-Detect
+                </span>
+              </div>
+              <p className="text-[11px] text-indigo-300/70">Fetch your live coordinates and street address</p>
+            </div>
+          </button>
+
           {isLoading ? (
             <div className="p-4 flex items-center justify-center gap-2 text-xs text-slate-400">
               <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />

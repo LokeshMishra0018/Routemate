@@ -262,6 +262,48 @@ export const TripCreatePage: React.FC = () => {
                 required
               />
 
+              {/* Origin Quick Presets */}
+              <div className="flex flex-wrap items-center gap-1.5 -mt-2">
+                <span className="text-[10px] uppercase font-semibold text-slate-500 mr-1">Quick Select:</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (navigator.geolocation) {
+                      navigator.geolocation.getCurrentPosition((pos) => {
+                        const lat = pos.coords.latitude;
+                        const lng = pos.coords.longitude;
+                        setSourceName(`Current GPS Location (${lat.toFixed(3)}, ${lng.toFixed(3)})`);
+                        setSourceCoords([lng, lat]);
+                      });
+                    }
+                  }}
+                  className="px-2 py-0.5 rounded-lg text-[11px] font-medium bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 transition-all flex items-center gap-1 active:scale-95"
+                >
+                  <Navigation className="w-3 h-3 text-indigo-400" />
+                  <span>📍 My Location</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSourceName('KIET Group of Institutions, Ghaziabad');
+                    setSourceCoords([77.4984, 28.7533]);
+                  }}
+                  className="px-2 py-0.5 rounded-lg text-[11px] font-medium bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/60 transition-all active:scale-95"
+                >
+                  🎓 KIET Campus
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSourceName('Shaheed Sthal (New Bus Adda) Metro');
+                    setSourceCoords([77.4248, 28.6713]);
+                  }}
+                  className="px-2 py-0.5 rounded-lg text-[11px] font-medium bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/60 transition-all active:scale-95"
+                >
+                  🚇 Shaheed Sthal
+                </button>
+              </div>
+
               {/* Destination Search */}
               <LocationAutocomplete
                 label="Destination Location"

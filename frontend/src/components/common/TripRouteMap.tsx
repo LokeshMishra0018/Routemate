@@ -16,6 +16,8 @@ import {
   MapPin,
   Clock,
   Globe,
+  Crosshair,
+  Loader2,
 } from 'lucide-react';
 import { computeRoadRoute, RouteCalculationResult } from '../../services/routing.service';
 
@@ -216,6 +218,20 @@ const MapAutoFitController: React.FC<{ waypoints: MapWaypoint[]; routeCoords: [n
 
   return null;
 };
+/**
+ * Helper hook to fly map to user's GPS position
+ */
+const UserLocationFlyToController: React.FC<{ userLocation: [number, number] | null }> = ({ userLocation }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (userLocation) {
+      map.flyTo(userLocation, 15, { animate: true });
+    }
+  }, [userLocation, map]);
+
+  return null;
+};
 
 export const TripRouteMap: React.FC<TripRouteMapProps> = ({
   waypoints,
@@ -232,11 +248,61 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
   const [routeResult, setRouteResult] = useState<RouteCalculationResult | null>(null);
   const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
   const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
+  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
 
   const googleMapRef = useRef<HTMLDivElement>(null);
   const googleMapInstance = useRef<any>(null);
   const googleMarkersRef = useRef<any[]>([]);
   const googlePolylineRef = useRef<any[]>([]);
+  const googleUserMarkerRef = useRef<any>(null);
+
+  const handleLocateMe = () => {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by your browser.');
+      return;
+    }
+
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setUserLocation([lat, lng]);
+        setIsLocating(false);
+
+        if (engine === 'google' && googleMapInstance.current) {
+          const win = window as any;
+          googleMapInstance.current.setCenter({ lat, lng });
+          googleMapInstance.current.setZoom(15);
+
+          if (googleUserMarkerRef.current) {
+            googleUserMarkerRef.current.setMap(null);
+          }
+
+          googleUserMarkerRef.current = new win.google.maps.Marker({
+            position: { lat, lng },
+            map: googleMapInstance.current,
+            title: 'Your Location',
+            icon: {
+              path: win.google.maps.SymbolPath.CIRCLE,
+              scale: 8,
+              fillColor: '#38bdf8',
+              fillOpacity: 1,
+              strokeColor: '#ffffff',
+              strokeWeight: 2,
+            },
+          });
+        }
+      },
+      (err) => {
+        console.warn('Geolocation error:', err);
+        setIsLocating(false);
+        alert('Could not access your location. Please check browser permissions.');
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
   // Initialize Google Maps API Loader if Key is Present
   useEffect(() => {
@@ -444,6 +510,26 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
           </button>
         )}
 
+        {/* Locate Me GPS Button */}
+        <button
+          type="button"
+          onClick={handleLocateMe}
+          disabled={isLocating}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs font-semibold shadow-lg backdrop-blur-md transition-all ${
+            userLocation
+              ? 'bg-sky-500/20 text-sky-300 border-sky-500/40 hover:bg-sky-500/30'
+              : 'bg-slate-900/90 text-slate-300 border-slate-700/60 hover:bg-slate-800'
+          }`}
+          title="Center map on my live GPS Location"
+        >
+          {isLocating ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-400" />
+          ) : (
+            <Crosshair className="w-3.5 h-3.5 text-sky-400" />
+          )}
+          <span className="hidden sm:inline">Locate Me</span>
+        </button>
+
         {/* Tile Theme Switcher */}
         <div className="flex items-center p-1 rounded-xl bg-slate-900/90 border border-slate-700/60 shadow-lg backdrop-blur-md text-xs">
           <button
@@ -545,6 +631,30 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
             waypoints={waypoints}
             routeCoords={routeResult?.coordinates || []}
           />
+
+          <UserLocationFlyToController userLocation={userLocation} />
+
+          {/* User Live Location Beacon */}
+          {userLocation && (
+            <Marker
+              position={userLocation}
+              icon={L.divIcon({
+                className: 'user-gps-beacon',
+                html: `
+                  <div class="relative flex items-center justify-center -translate-x-1/2 -translate-y-1/2">
+                    <div class="absolute w-8 h-8 rounded-full bg-sky-500 opacity-50 animate-ping"></div>
+                    <div class="relative w-4 h-4 rounded-full bg-sky-400 border-2 border-white shadow-md"></div>
+                  </div>
+                `,
+                iconSize: [20, 20],
+                iconAnchor: [10, 10],
+              })}
+            >
+              <Popup>
+                <div className="p-1 text-xs text-slate-100 font-semibold">📍 You are here (Live GPS)</div>
+              </Popup>
+            </Marker>
+          )}
 
           {/* Render Road Polyline with Glowing Effect */}
           {routeResult && routeResult.coordinates.length > 1 && (
