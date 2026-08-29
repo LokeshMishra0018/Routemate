@@ -43,10 +43,13 @@ export class UsersService {
         collegeId: profile?.collegeId || '',
         collegeName,
         collegeDomain,
+        branch: profile?.branch || null,
+        rollNumber: profile?.rollNumber || null,
         academicYear: profile?.academicYear || null,
         gender: profile?.gender || null,
         bio: profile?.bio || null,
         avatarUrl: profile?.avatarUrl || null,
+        phoneNumber: profile?.phoneNumber || null,
         verificationStatus,
         verificationTier,
         trustScore: profile?.trustScore || 50,
@@ -66,10 +69,13 @@ export class UsersService {
     userId: string,
     data: {
       fullName?: string;
+      branch?: string | null;
+      rollNumber?: string | null;
       academicYear?: number | null;
       gender?: string | null;
       bio?: string | null;
       avatarUrl?: string | null;
+      phoneNumber?: string | null;
     }
   ): Promise<UserProfileDto> {
     const profile = await usersRepository.findProfileByUserId(userId);
@@ -79,10 +85,13 @@ export class UsersService {
 
     const updates: Record<string, unknown> = {};
     if (data.fullName !== undefined) updates.fullName = data.fullName.trim();
+    if (data.branch !== undefined) updates.branch = data.branch?.trim() || null;
+    if (data.rollNumber !== undefined) updates.rollNumber = data.rollNumber?.trim() || null;
     if (data.academicYear !== undefined) updates.academicYear = data.academicYear;
     if (data.gender !== undefined) updates.gender = data.gender;
     if (data.bio !== undefined) updates.bio = data.bio?.trim() ?? null;
     if (data.avatarUrl !== undefined) updates.avatarUrl = data.avatarUrl;
+    if (data.phoneNumber !== undefined) updates.phoneNumber = data.phoneNumber?.trim() || null;
 
     if (Object.keys(updates).length > 0) {
       await usersRepository.updateProfile(userId, updates);
@@ -123,10 +132,13 @@ export class UsersService {
       fullName: profile.fullName,
       collegeId: profile.collegeId,
       collegeName,
+      branch: profile.branch || null,
+      rollNumber: profile.rollNumber || null,
       academicYear: profile.academicYear,
       gender: profile.gender,
       bio: profile.bio,
       avatarUrl: profile.avatarUrl,
+      phoneNumber: profile.phoneNumber || null,
       verificationStatus: profile.verificationStatus,
       verificationTier,
       trustScore: profile.trustScore,

@@ -44,10 +44,13 @@ export interface ProfileDocument {
   userId: string; // references users._id as string
   fullName: string;
   collegeId: string; // references colleges._id
+  branch?: string | null;
+  rollNumber?: string | null;
   academicYear: number | null;
   gender: string | null;
   bio: string | null;
   avatarUrl: string | null;
+  phoneNumber?: string | null;
   verificationStatus: VerificationStatus;
   trustScore: number;
   averageRating: number;
@@ -80,10 +83,13 @@ export interface UserProfileDto {
     collegeId: string;
     collegeName?: string;
     collegeDomain?: string;
+    branch?: string | null;
+    rollNumber?: string | null;
     academicYear: number | null;
     gender: string | null;
     bio: string | null;
     avatarUrl: string | null;
+    phoneNumber?: string | null;
     verificationStatus: VerificationStatus;
     verificationTier: VerificationTier;
     trustScore: number;
@@ -99,10 +105,13 @@ export interface PublicProfileDto {
   fullName: string;
   collegeId: string;
   collegeName?: string;
+  branch?: string | null;
+  rollNumber?: string | null;
   academicYear: number | null;
   gender: string | null;
   bio: string | null;
   avatarUrl: string | null;
+  phoneNumber?: string | null;
   verificationStatus: VerificationStatus;
   verificationTier: VerificationTier;
   trustScore: number;

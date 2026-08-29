@@ -194,6 +194,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateProfileState = (updated: Partial<UserProfile>) => {
     setProfile((prev) => (prev ? { ...prev, ...updated } : null));
+    setUser((prev) => (prev ? { ...prev, ...updated } : null));
   };
 
   return (

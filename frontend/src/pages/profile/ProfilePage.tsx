@@ -1,16 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  User,
   ShieldCheck,
   Star,
-  Calendar,
-  Users,
   Award,
   MessageSquarePlus,
   Building,
   GraduationCap,
+  Edit3,
+  BookOpen,
+  Hash,
+  UserCheck,
+  Phone,
   Sparkles,
 } from 'lucide-react';
 import { apiClient } from '../../services/api.client';
@@ -20,7 +22,7 @@ import { PublicProfile, Review, UserRatingSummary } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { Avatar, Badge } from '../../components/ui/Badge';
 import { TrustBadge } from '../../components/common/TrustBadge';
-import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Card';
+import { Card } from '../../components/ui/Card';
 import { TrustScoreMeter } from '../../components/ui/TrustScoreMeter';
 import { RatingStars } from '../../components/ui/Tabs';
 import { Modal } from '../../components/ui/Modal';
@@ -28,15 +30,31 @@ import { Input } from '../../components/ui/Input';
 import { Select, Textarea } from '../../components/ui/Select';
 import { EmptyState, ErrorState, LoadingSpinner } from '../../components/ui/EmptyState';
 
+const CAMPUS_BRANCHES = [
+  { value: 'Computer Science & Engineering (CSE)', label: 'Computer Science & Engineering (CSE)' },
+  { value: 'Information Technology (IT)', label: 'Information Technology (IT)' },
+  { value: 'Computer Science & AI / ML (CS-AIML)', label: 'Computer Science & AI / ML (CS-AIML)' },
+  { value: 'Computer Science & Data Science (CS-DS)', label: 'Computer Science & Data Science (CS-DS)' },
+  { value: 'Electronics & Communication (ECE)', label: 'Electronics & Communication (ECE)' },
+  { value: 'Electrical & Electronics Engineering (EEE)', label: 'Electrical & Electronics Engineering (EEE)' },
+  { value: 'Mechanical Engineering (ME)', label: 'Mechanical Engineering (ME)' },
+  { value: 'Civil Engineering (CE)', label: 'Civil Engineering (CE)' },
+  { value: 'Master of Computer Applications (MCA)', label: 'Master of Computer Applications (MCA)' },
+  { value: 'Master of Business Administration (MBA)', label: 'Master of Business Administration (MBA)' },
+  { value: 'Pharmacy (B.Pharm / M.Pharm)', label: 'Pharmacy (B.Pharm / M.Pharm)' },
+  { value: 'Other Department', label: 'Other Department' },
+];
+
 export const ProfilePage: React.FC = () => {
   const { id } = useParams<{ id?: string }>();
-  const { user: currentUser, profile: currentProfile } = useAuth();
+  const { user: currentUser, updateProfileState } = useAuth();
   const { success, error } = useToast();
   const queryClient = useQueryClient();
 
   const targetUserId = id || currentUser?.id;
   const isMyProfile = targetUserId === currentUser?.id;
 
+  // Review Modal State
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [reviewTripId, setReviewTripId] = useState('');
   const [reviewRating, setReviewRating] = useState<number>(5);
@@ -45,6 +63,16 @@ export const ProfilePage: React.FC = () => {
   const [communicationRating, setCommunicationRating] = useState<number>(5);
   const [reviewComment, setReviewComment] = useState('');
   const [reviewTags, setReviewTags] = useState('punctual, respectful');
+
+  // Edit Profile Modal State
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editFullName, setEditFullName] = useState('');
+  const [editBranch, setEditBranch] = useState('Computer Science & Engineering (CSE)');
+  const [editRollNumber, setEditRollNumber] = useState('');
+  const [editAcademicYear, setEditAcademicYear] = useState<number>(3);
+  const [editGender, setEditGender] = useState<'male' | 'female'>('male');
+  const [editPhoneNumber, setEditPhoneNumber] = useState('');
+  const [editBio, setEditBio] = useState('');
 
   // 1. Fetch Profile
   const { data: profile, isLoading: profileLoading, isError: profileError } = useQuery({
@@ -56,6 +84,19 @@ export const ProfilePage: React.FC = () => {
     },
     enabled: !!targetUserId,
   });
+
+  // Sync edit form with profile data
+  useEffect(() => {
+    if (profile && isMyProfile) {
+      setEditFullName(profile.fullName || '');
+      setEditBranch(profile.branch || 'Computer Science & Engineering (CSE)');
+      setEditRollNumber(profile.rollNumber || '');
+      setEditAcademicYear(profile.academicYear || 3);
+      setEditGender((profile.gender as 'male' | 'female') || 'male');
+      setEditPhoneNumber(profile.phoneNumber || '');
+      setEditBio(profile.bio || '');
+    }
+  }, [profile, isMyProfile]);
 
   // 2. Fetch User Reviews & Rating Summary
   const { data: reviewsData, isLoading: reviewsLoading } = useQuery({
@@ -69,6 +110,35 @@ export const ProfilePage: React.FC = () => {
       };
     },
     enabled: !!targetUserId,
+  });
+
+  // Update Profile Mutation
+  const updateProfileMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiClient.patch('/users/me/profile', {
+        fullName: editFullName.trim(),
+        branch: editBranch.trim() || undefined,
+        rollNumber: editRollNumber.trim() || undefined,
+        academicYear: Number(editAcademicYear),
+        gender: editGender,
+        phoneNumber: editPhoneNumber.trim() || undefined,
+        bio: editBio.trim() || undefined,
+      });
+      return res.data.data;
+    },
+    onSuccess: (updatedData) => {
+      success('Profile Updated', 'Your campus identity details have been saved successfully.');
+      setIsEditModalOpen(false);
+      if (updatedData?.profile) {
+        updateProfileState(updatedData.profile);
+      }
+      queryClient.invalidateQueries({ queryKey: ['user-public-profile', targetUserId] });
+      queryClient.invalidateQueries({ queryKey: ['admin-overview-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-recent-logins'] });
+    },
+    onError: (err: unknown) => {
+      if (err instanceof Error) error('Update Failed', err.message);
+    },
   });
 
   // Submit Review Mutation
@@ -105,8 +175,10 @@ export const ProfilePage: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Profile Banner Card */}
-      <Card className="glass-panel border-slate-700 p-6 sm:p-8 space-y-6 shadow-2xl">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+      <Card className="glass-panel border-slate-700/80 p-6 sm:p-8 space-y-6 shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-80 h-32 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 relative z-10">
           <div className="flex items-center gap-4">
             <Avatar
               name={profile.fullName}
@@ -132,33 +204,84 @@ export const ProfilePage: React.FC = () => {
                   size="sm"
                 />
               </div>
-              <p className="text-xs text-slate-300 mt-1 flex items-center gap-2">
-                <Building className="w-3.5 h-3.5 text-indigo-400" />
-                <span>{profile.collegeName || 'KIET Group of Institutions'}</span>
+
+              {/* Academic Details & Badges */}
+              <div className="flex flex-wrap items-center gap-y-1 gap-x-2.5 text-xs text-slate-300 mt-1.5">
+                <span className="flex items-center gap-1">
+                  <Building className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>{profile.collegeName || 'KIET Group of Institutions'}</span>
+                </span>
                 <span>•</span>
-                <GraduationCap className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Year {profile.academicYear || 1}</span>
-              </p>
+                <span className="flex items-center gap-1">
+                  <GraduationCap className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Year {profile.academicYear || 1}</span>
+                </span>
+                {profile.branch && (
+                  <>
+                    <span>•</span>
+                    <span className="flex items-center gap-1 text-sky-300 font-semibold">
+                      <BookOpen className="w-3.5 h-3.5 text-sky-400" />
+                      <span>{profile.branch}</span>
+                    </span>
+                  </>
+                )}
+                {profile.rollNumber && (
+                  <>
+                    <span>•</span>
+                    <span className="flex items-center gap-1 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700 text-amber-300 font-mono text-[11px] font-bold">
+                      <Hash className="w-3 h-3 text-amber-400" />
+                      <span>{profile.rollNumber}</span>
+                    </span>
+                  </>
+                )}
+                {profile.gender && (
+                  <>
+                    <span>•</span>
+                    <span className="capitalize text-slate-400 font-medium">
+                      {profile.gender}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
-          {!isMyProfile && (
-            <Button
-              variant="secondary"
-              size="sm"
-              leftIcon={<MessageSquarePlus className="w-4 h-4 text-indigo-400" />}
-              onClick={() => setIsReviewModalOpen(true)}
-            >
-              Write Review
-            </Button>
-          )}
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            {isMyProfile ? (
+              <Button
+                variant="outline"
+                size="sm"
+                leftIcon={<Edit3 className="w-4 h-4 text-indigo-400" />}
+                onClick={() => setIsEditModalOpen(true)}
+                className="bg-slate-900/90 border-slate-700 hover:border-indigo-500/60 text-slate-200"
+              >
+                Edit Profile
+              </Button>
+            ) : (
+              <Button
+                variant="secondary"
+                size="sm"
+                leftIcon={<MessageSquarePlus className="w-4 h-4 text-indigo-400" />}
+                onClick={() => setIsReviewModalOpen(true)}
+              >
+                Write Review
+              </Button>
+            )}
+          </div>
         </div>
 
-        {profile.bio && (
-          <p className="text-xs text-slate-300 leading-relaxed bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+        {profile.bio ? (
+          <p className="text-xs text-slate-300 leading-relaxed bg-slate-900/70 p-4 rounded-xl border border-slate-800">
             &ldquo;{profile.bio}&rdquo;
           </p>
-        )}
+        ) : isMyProfile ? (
+          <div
+            onClick={() => setIsEditModalOpen(true)}
+            className="text-xs text-slate-500 italic bg-slate-900/40 p-3 rounded-xl border border-dashed border-slate-800 hover:border-indigo-500/40 cursor-pointer transition-colors text-center"
+          >
+            + Add a short bio to let ride companions know your commute routine...
+          </div>
+        ) : null}
 
         {/* Reputation & Milestone Metrics */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-800">
@@ -272,6 +395,114 @@ export const ProfilePage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Edit Profile Modal */}
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title="Edit Profile & Campus Identity"
+        description="Update your academic credentials, contact details, and commute bio."
+        footer={
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={() => setIsEditModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => updateProfileMutation.mutate()}
+              isLoading={updateProfileMutation.isPending}
+              disabled={!editFullName.trim()}
+            >
+              Save Profile Changes
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4 pt-2">
+          <Input
+            label="Full Name"
+            placeholder="e.g. Yogita Mishra"
+            value={editFullName}
+            onChange={(e) => setEditFullName(e.target.value)}
+            required
+          />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Select
+              label="Branch / Department"
+              value={editBranch}
+              onChange={(e) => setEditBranch(e.target.value)}
+              options={CAMPUS_BRANCHES}
+            />
+
+            <Input
+              label="College Roll No / Student ID"
+              placeholder="e.g. 2327CS1097"
+              value={editRollNumber}
+              onChange={(e) => setEditRollNumber(e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Select
+              label="Academic Year"
+              value={editAcademicYear}
+              onChange={(e) => setEditAcademicYear(Number(e.target.value))}
+              options={[
+                { value: 1, label: '1st Year (Fresher)' },
+                { value: 2, label: '2nd Year (Sophomore)' },
+                { value: 3, label: '3rd Year (Junior)' },
+                { value: 4, label: '4th Year (Senior)' },
+                { value: 5, label: '5th Year (Integrated)' },
+              ]}
+            />
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-300 block">Gender</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditGender('male')}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                    editGender === 'male'
+                      ? 'bg-indigo-600 text-white border-indigo-500 shadow-md shadow-indigo-500/20'
+                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  Male
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditGender('female')}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                    editGender === 'female'
+                      ? 'bg-pink-600 text-white border-pink-500 shadow-md shadow-pink-500/20'
+                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  Female
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <Input
+            label="Phone / WhatsApp Number (Optional)"
+            placeholder="e.g. +91 98765 43210"
+            value={editPhoneNumber}
+            onChange={(e) => setEditPhoneNumber(e.target.value)}
+            helperText="Used for ride coordination with accepted co-commuters."
+          />
+
+          <Textarea
+            label="Commute Bio & Routine"
+            placeholder="Daily commuter from Vaishali Metro to KIET campus. Calm rides & coding music lover..."
+            value={editBio}
+            onChange={(e) => setEditBio(e.target.value)}
+            rows={3}
+          />
+        </div>
+      </Modal>
 
       {/* Review Modal */}
       <Modal

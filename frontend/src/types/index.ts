@@ -30,10 +30,13 @@ export interface UserProfile {
   fullName: string;
   collegeId: string;
   collegeName?: string;
+  branch?: string | null;
+  rollNumber?: string | null;
   academicYear: number;
   gender: string;
   bio?: string | null;
   avatarUrl?: string | null;
+  phoneNumber?: string | null;
   verificationStatus: VerificationStatus;
   verificationTier?: VerificationTier;
   trustScore: number;
@@ -53,10 +56,13 @@ export interface PublicProfile {
   fullName: string;
   collegeId?: string;
   collegeName?: string;
+  branch?: string | null;
+  rollNumber?: string | null;
   academicYear?: number;
   gender?: string;
   bio?: string | null;
   avatarUrl?: string | null;
+  phoneNumber?: string | null;
   verificationStatus: VerificationStatus;
   verificationTier?: VerificationTier;
   trustScore: number;
