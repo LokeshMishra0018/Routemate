@@ -62,6 +62,10 @@ export interface TripDocument {
   meetingPoint?: MeetingPoint | null;
   isRecurring: boolean;
   recurringTripId?: string | null;
+  isDeleted?: boolean;
+  deletedAt?: Date | null;
+  deletedBy?: 'host' | 'admin' | null;
+  deletionReason?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -99,6 +103,10 @@ export interface TripResponseDto {
   notes: string | null;
   meetingPoint: MeetingPoint | null;
   isRecurring: boolean;
+  isDeleted?: boolean;
+  deletedAt?: string | null;
+  deletedBy?: 'host' | 'admin' | null;
+  deletionReason?: string | null;
   createdAt: string;
   updatedAt: string;
 }

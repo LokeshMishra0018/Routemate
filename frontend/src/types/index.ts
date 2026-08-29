@@ -129,6 +129,10 @@ export interface Trip {
   costSharing?: CostSharingConfig;
   availableSeats?: number;
   notes?: string;
+  isDeleted?: boolean;
+  deletedAt?: string | null;
+  deletedBy?: 'host' | 'admin' | null;
+  deletionReason?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -553,6 +557,11 @@ export interface AdminTripItem {
   fareAmount: number;
   status: string;
   isHidden?: boolean;
+  isDeleted?: boolean;
+  deletedAt?: string | null;
+  deletedBy?: 'host' | 'admin' | null;
+  cancelledByAdmin?: boolean;
+  cancellationReason?: string | null;
   adminNotes?: string | null;
   revisionRequestedAt?: string | null;
   passengersCount: number;

@@ -1253,6 +1253,49 @@ export class AdminService {
   }
 
   /**
+   * Restore a Cancelled or Deleted Trip back to Active Planning status
+   */
+  async restoreTripByAdmin(adminUserId: string, tripId: string) {
+    const db = getDb();
+    const { ObjectId } = await import('mongodb');
+
+    const trip = await db.collection(COLLECTIONS.TRIPS).findOne({ _id: new ObjectId(tripId) });
+    if (!trip) {
+      throw new NotFoundError('Trip not found');
+    }
+
+    await db.collection(COLLECTIONS.TRIPS).updateOne(
+      { _id: new ObjectId(tripId) },
+      {
+        $set: {
+          status: 'planning',
+          isDeleted: false,
+          deletedAt: null,
+          deletedBy: null,
+          deletionReason: null,
+          cancelledByAdmin: false,
+          cancellationReason: null,
+          updatedAt: new Date(),
+        },
+      }
+    );
+
+    await adminRepository.logAction({
+      actorUserId: adminUserId,
+      actionType: 'trip_restored_by_admin',
+      targetUserId: trip.userId,
+      targetResourceId: tripId,
+      metadata: {
+        source: trip.source?.name,
+        destination: trip.destination?.name,
+      },
+      createdAt: new Date(),
+    });
+
+    return { success: true, message: 'Trip successfully restored to active status.' };
+  }
+
+  /**
    * Toggle Trip Visibility (Hide from public search / Unhide)
    */
   async toggleTripVisibility(adminUserId: string, tripId: string, isHidden: boolean) {

@@ -23,6 +23,7 @@ import {
   Sparkles,
   Info,
   RefreshCw,
+  RotateCcw,
 } from 'lucide-react';
 import { apiClient } from '../../services/api.client';
 import { AdminTripItem, AdminTripManifest, PaginatedResponse } from '../../types';
@@ -193,6 +194,29 @@ export const AdminTripsPage: React.FC = () => {
     },
   });
 
+  // 8. Restore Mutation (Reactivates a cancelled/deleted trip back to active status)
+  const restoreMutation = useMutation({
+    mutationFn: async (tripId: string) => {
+      const res = await apiClient.post(`/admin/trips/${tripId}/restore`);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast({
+        type: 'success',
+        title: 'Trip Restored',
+        message: 'The trip has been reactivated and returned to active planning status.',
+      });
+      queryClient.invalidateQueries({ queryKey: ['admin-trips-list'] });
+    },
+    onError: (err: any) => {
+      toast({
+        type: 'error',
+        title: 'Restore Failed',
+        message: err.response?.data?.error?.message || 'Failed to restore trip',
+      });
+    },
+  });
+
   const trips = data?.data || [];
   const pagination = data?.pagination || { page: 1, totalPages: 1, totalCount: 0 };
 
@@ -349,13 +373,13 @@ export const AdminTripsPage: React.FC = () => {
                                 ? 'success'
                                 : t.status === 'in_progress'
                                 ? 'brand'
-                                : t.status === 'cancelled'
+                                : t.status === 'cancelled' || t.isDeleted
                                 ? 'danger'
                                 : 'warning'
                             }
                             className="capitalize text-[10px]"
                           >
-                            {t.status}
+                            {t.isDeleted ? 'Deleted by Host' : t.cancelledByAdmin ? 'Cancelled (Admin)' : t.status}
                           </Badge>
 
                           {t.isHidden && (
@@ -387,70 +411,85 @@ export const AdminTripsPage: React.FC = () => {
                             Inspect
                           </Button>
 
-                          {/* 2. Hide / Unhide Toggle */}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              visibilityMutation.mutate({ tripId: t.id, isHidden: !t.isHidden })
-                            }
-                            title={t.isHidden ? 'Restore to public search' : 'Hide from student search'}
-                            leftIcon={
-                              t.isHidden ? (
-                                <Eye className="w-3 h-3 text-emerald-400" />
-                              ) : (
-                                <EyeOff className="w-3 h-3 text-amber-400" />
-                              )
-                            }
-                            className="text-[11px] py-1 px-2"
-                          >
-                            {t.isHidden ? 'Unhide' : 'Hide'}
-                          </Button>
-
-                          {/* 3. Request Changes */}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setRevisionModalTrip(t);
-                              setRevisionNotes(t.adminNotes || '');
-                            }}
-                            title="Send revision advisory instructions to host"
-                            leftIcon={<Edit3 className="w-3 h-3 text-amber-300" />}
-                            className="text-[11px] py-1 px-2"
-                          >
-                            Advise
-                          </Button>
-
-                          {/* 4. Force Complete */}
-                          {t.status !== 'completed' && t.status !== 'cancelled' && (
+                          {/* 2. Restore Trip (If cancelled or deleted) */}
+                          {(t.status === 'cancelled' || t.isDeleted) ? (
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => forceCompleteMutation.mutate(t.id)}
-                              title="Force complete ride"
-                              leftIcon={<CheckCircle2 className="w-3 h-3 text-emerald-400" />}
+                              onClick={() => restoreMutation.mutate(t.id)}
+                              disabled={restoreMutation.isPending}
+                              title="Restore trip back to active planning status"
+                              leftIcon={<RotateCcw className="w-3 h-3 text-emerald-400" />}
                               className="text-[11px] py-1 px-2 border-emerald-500/30 text-emerald-300 hover:bg-emerald-950/40"
                             >
-                              Complete
+                              Restore
                             </Button>
+                          ) : (
+                            <>
+                              {/* Hide / Unhide Toggle */}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  visibilityMutation.mutate({ tripId: t.id, isHidden: !t.isHidden })
+                                }
+                                title={t.isHidden ? 'Restore to public search' : 'Hide from student search'}
+                                leftIcon={
+                                  t.isHidden ? (
+                                    <Eye className="w-3 h-3 text-emerald-400" />
+                                  ) : (
+                                    <EyeOff className="w-3 h-3 text-amber-400" />
+                                  )
+                                }
+                                className="text-[11px] py-1 px-2"
+                              >
+                                {t.isHidden ? 'Unhide' : 'Hide'}
+                              </Button>
+
+                              {/* Request Changes */}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setRevisionModalTrip(t);
+                                  setRevisionNotes(t.adminNotes || '');
+                                }}
+                                title="Send revision advisory instructions to host"
+                                leftIcon={<Edit3 className="w-3 h-3 text-amber-300" />}
+                                className="text-[11px] py-1 px-2"
+                              >
+                                Advise
+                              </Button>
+
+                              {/* Force Complete */}
+                              {t.status !== 'completed' && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => forceCompleteMutation.mutate(t.id)}
+                                  title="Force complete ride"
+                                  leftIcon={<CheckCircle2 className="w-3 h-3 text-emerald-400" />}
+                                  className="text-[11px] py-1 px-2 border-emerald-500/30 text-emerald-300 hover:bg-emerald-950/40"
+                                >
+                                  Complete
+                                </Button>
+                              )}
+
+                              {/* Soft Cancel */}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setCancelModalTrip(t)}
+                                title="Soft cancel ride"
+                                leftIcon={<XCircle className="w-3 h-3 text-rose-400" />}
+                                className="text-[11px] py-1 px-2 border-rose-500/30 text-rose-300 hover:bg-rose-950/40"
+                              >
+                                Cancel
+                              </Button>
+                            </>
                           )}
 
-                          {/* 5. Soft Cancel */}
-                          {t.status !== 'cancelled' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setCancelModalTrip(t)}
-                              title="Soft cancel ride"
-                              leftIcon={<XCircle className="w-3 h-3 text-rose-400" />}
-                              className="text-[11px] py-1 px-2 border-rose-500/30 text-rose-300 hover:bg-rose-950/40"
-                            >
-                              Cancel
-                            </Button>
-                          )}
-
-                          {/* 6. Hard Delete & Purge (Frees Memory) */}
+                          {/* Hard Delete & Purge (Frees Memory) */}
                           <Button
                             size="sm"
                             variant="danger"

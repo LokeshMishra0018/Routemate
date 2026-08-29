@@ -36,6 +36,10 @@ export class TripsService {
       notes: trip.notes || null,
       meetingPoint: trip.meetingPoint || null,
       isRecurring: trip.isRecurring,
+      isDeleted: trip.isDeleted || false,
+      deletedAt: trip.deletedAt ? trip.deletedAt.toISOString() : null,
+      deletedBy: trip.deletedBy || null,
+      deletionReason: trip.deletionReason || null,
       createdAt: trip.createdAt.toISOString(),
       updatedAt: trip.updatedAt.toISOString(),
     };
@@ -197,9 +201,9 @@ export class TripsService {
   }
 
   /**
-   * Delete or cancel trip
+   * Delete or cancel trip (Soft-deletion with audit logging)
    */
-  async deleteTrip(userId: string, tripId: string, role?: string): Promise<{ message: string }> {
+  async deleteTrip(userId: string, tripId: string, role?: string, reason?: string): Promise<{ message: string }> {
     const trip = await tripsRepository.findTripById(tripId);
     if (!trip) {
       throw new NotFoundError('Trip not found');
@@ -209,8 +213,26 @@ export class TripsService {
       throw new ForbiddenError('You do not have permission to delete this trip');
     }
 
-    await tripsRepository.deleteTrip(tripId);
-    return { message: 'Trip deleted successfully' };
+    const deletedBy = role === 'admin' ? 'admin' : 'host';
+    await tripsRepository.deleteTrip(tripId, deletedBy, reason);
+    return { message: 'Trip cancelled and removed from active search' };
+  }
+
+  /**
+   * Restore a deleted or cancelled trip (Admin only)
+   */
+  async restoreTrip(tripId: string, role?: string): Promise<{ message: string }> {
+    if (role !== 'admin') {
+      throw new ForbiddenError('Only campus administrators can restore trips');
+    }
+
+    const trip = await tripsRepository.findTripById(tripId);
+    if (!trip) {
+      throw new NotFoundError('Trip not found');
+    }
+
+    await tripsRepository.restoreTrip(tripId);
+    return { message: 'Trip restored to active status successfully' };
   }
 
   /**

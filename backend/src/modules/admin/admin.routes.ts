@@ -370,6 +370,15 @@ export const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance): Pro
     }
   );
 
+  // POST & PATCH /api/v1/admin/trips/:id/restore - Restore cancelled/deleted trip back to active status
+  const handleRestoreTrip = async (request: any, reply: any) => {
+    const { id } = request.params as { id: string };
+    const result = await adminService.restoreTripByAdmin(request.user!.id, id);
+    return reply.status(200).send(createSuccessResponse(result));
+  };
+  app.post('/trips/:id/restore', { preHandler: [authenticate, requireRole('moderator', 'admin')] }, handleRestoreTrip);
+  app.patch('/trips/:id/restore', { preHandler: [authenticate, requireRole('moderator', 'admin')] }, handleRestoreTrip);
+
   // PATCH & POST /api/v1/admin/trips/:id/visibility - Toggle trip search discovery
   const handleVisibility = async (request: any, reply: any) => {
     const { id } = request.params as { id: string };

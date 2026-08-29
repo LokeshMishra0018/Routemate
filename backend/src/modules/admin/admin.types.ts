@@ -13,6 +13,7 @@ export interface AdminActionDocument {
     | 'sos_resolved'
     | 'trip_cancelled_by_admin'
     | 'trip_purged_by_admin'
+    | 'trip_restored_by_admin'
     | 'trip_visibility_toggled'
     | 'trip_changes_requested'
     | 'trip_force_completed'

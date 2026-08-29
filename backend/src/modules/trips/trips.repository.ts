@@ -58,9 +58,13 @@ export class TripsRepository {
       query.status = { $in: ['planning', 'confirmed', 'upcoming'] };
     }
 
-    // Exclude admin-hidden trips from public searches
+    // Exclude deleted or admin-hidden trips from general discovery
     if (!filters.userId) {
       query.isHidden = { $ne: true };
+      query.isDeleted = { $ne: true };
+    } else {
+      // For personal trips, only show non-deleted unless explicitly requested
+      query.isDeleted = { $ne: true };
     }
 
     // Filter by Transport
@@ -144,7 +148,39 @@ export class TripsRepository {
     );
   }
 
-  async deleteTrip(id: string): Promise<void> {
+  async deleteTrip(id: string, deletedBy: 'host' | 'admin' = 'host', reason?: string): Promise<void> {
+    await this.collection.updateOne(
+      { _id: new ObjectId(id) },
+      {
+        $set: {
+          status: 'cancelled',
+          isDeleted: true,
+          deletedAt: new Date(),
+          deletedBy,
+          deletionReason: reason || null,
+          updatedAt: new Date(),
+        },
+      }
+    );
+  }
+
+  async restoreTrip(id: string): Promise<void> {
+    await this.collection.updateOne(
+      { _id: new ObjectId(id) },
+      {
+        $set: {
+          status: 'planning',
+          isDeleted: false,
+          deletedAt: null,
+          deletedBy: null,
+          deletionReason: null,
+          updatedAt: new Date(),
+        },
+      }
+    );
+  }
+
+  async purgeTrip(id: string): Promise<void> {
     await this.collection.deleteOne({ _id: new ObjectId(id) });
   }
 

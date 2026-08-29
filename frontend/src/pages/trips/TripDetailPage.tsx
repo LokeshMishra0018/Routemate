@@ -11,6 +11,7 @@ import {
   Sparkles,
   ArrowLeft,
   Trash2,
+  AlertTriangle,
   Share2,
   ShieldCheck,
   CheckCircle,
@@ -43,6 +44,7 @@ export const TripDetailPage: React.FC = () => {
   const queryClient = useQueryClient();
 
   const [isConnectOpen, setIsConnectOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [connectMessage, setConnectMessage] = useState('Hi! I saw your campus route and would love to travel together.');
 
   const { data: trip, isLoading, isError, refetch } = useQuery({
@@ -69,12 +71,14 @@ export const TripDetailPage: React.FC = () => {
       await apiClient.delete(`/trips/${id}`);
     },
     onSuccess: () => {
-      success('Trip Cancelled', 'Your scheduled trip has been removed.');
+      success('Trip Deleted', 'Your scheduled trip has been cancelled and removed from search.');
+      setIsDeleteModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['trips-list'] });
+      queryClient.invalidateQueries({ queryKey: ['my-trips-dashboard'] });
       navigate('/trips');
     },
     onError: (err: unknown) => {
-      if (err instanceof Error) error('Failed to cancel trip', err.message);
+      if (err instanceof Error) error('Failed to delete trip', err.message);
     },
   });
 
@@ -234,12 +238,9 @@ export const TripDetailPage: React.FC = () => {
                 <Button
                   variant="danger"
                   size="sm"
-                  onClick={() => {
-                    if (confirm('Are you sure you want to cancel this trip?')) {
-                      deleteTripMutation.mutate();
-                    }
-                  }}
+                  onClick={() => setIsDeleteModalOpen(true)}
                   isLoading={deleteTripMutation.isPending}
+                  title="Delete Trip"
                 >
                   <Trash2 className="w-4 h-4" />
                 </Button>
@@ -655,6 +656,69 @@ export const TripDetailPage: React.FC = () => {
           </p>
         </div>
       </Modal>
+
+      {/* Delete Trip Confirmation Modal */}
+      {trip && (
+        <Modal
+          isOpen={isDeleteModalOpen}
+          onClose={() => setIsDeleteModalOpen(false)}
+          title="Delete Campus Trip"
+        >
+          <div className="space-y-4 pt-1">
+            <div className="p-4 rounded-2xl bg-rose-950/30 border border-rose-500/30 flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+              <div className="text-xs space-y-1">
+                <p className="font-bold text-rose-200">
+                  Are you sure you want to delete this trip?
+                </p>
+                <p className="text-slate-300">
+                  This ride will be marked as cancelled in the campus registry, removed from active search results, and your connected companions will be notified.
+                </p>
+              </div>
+            </div>
+
+            {/* Trip summary recap */}
+            <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2 text-xs">
+              <div className="flex items-center justify-between font-bold text-slate-200">
+                <span className="flex items-center gap-1.5 truncate max-w-[200px]">
+                  <MapPin className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                  {trip.source?.name} ➔ {trip.destination?.name}
+                </span>
+                <Badge variant="brand" size="sm">
+                  {trip.transportType}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                <span className="flex items-center gap-1">
+                  <Clock className="w-3 h-3 text-slate-500" />
+                  {trip.travelDate} at {trip.departureTime ? formatTime(trip.departureTime) : 'N/A'}
+                </span>
+                <span>{trip.availableSeats || 1} available seats</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsDeleteModalOpen(false)}
+                disabled={deleteTripMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => deleteTripMutation.mutate()}
+                isLoading={deleteTripMutation.isPending}
+                leftIcon={<Trash2 className="w-4 h-4" />}
+              >
+                Confirm Deletion
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };
