@@ -429,6 +429,35 @@ export interface AdminOverviewStats {
     tripsCount: number;
   }>;
   recentEvents: LiveTelemetryEvent[];
+  peakOnline?: {
+    currentLive: number;
+    todayPeak: number;
+    todayPeakTime: string;
+    allTimePeak: number;
+    allTimePeakDate: string;
+  };
+  breakdown?: {
+    verifications: {
+      verified: number;
+      pending: number;
+      admin: number;
+    };
+    authMethods: {
+      google: number;
+      emailPassword: number;
+    };
+    tripStatus: {
+      completed: number;
+      planned: number;
+      inProgress: number;
+      cancelled: number;
+    };
+  };
+  trendCurves?: {
+    hours24: Array<{ label: string; value: number; hour: number }>;
+    days7: Array<{ label: string; fullDate: string; value: number }>;
+    days30: Array<{ label: string; value: number }>;
+  };
 }
 
 export interface AdminFunnelStage {
