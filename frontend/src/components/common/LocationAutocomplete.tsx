@@ -283,7 +283,7 @@ export const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
 
       {/* Autocomplete Dropdown Menu */}
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-slate-900/95 border border-slate-800/90 rounded-xl shadow-2xl backdrop-blur-xl max-h-72 overflow-y-auto divide-y divide-slate-800/50 animate-in fade-in slide-in-from-top-1 duration-150">
+        <div className="absolute top-full left-0 right-0 mt-1.5 z-[100] bg-slate-900/95 border border-slate-800/90 rounded-xl shadow-2xl backdrop-blur-xl max-h-72 overflow-y-auto divide-y divide-slate-800/50 animate-in fade-in slide-in-from-top-1 duration-150">
           {/* Top Quick-Action: Current GPS Location */}
           <button
             type="button"

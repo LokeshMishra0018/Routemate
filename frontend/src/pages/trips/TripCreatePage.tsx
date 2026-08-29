@@ -15,6 +15,10 @@ import {
   CheckCircle2,
   Shield,
   Leaf,
+  ArrowUpDown,
+  RotateCcw,
+  Crosshair,
+  X,
 } from 'lucide-react';
 import { apiClient } from '../../services/api.client';
 import { useToast } from '../../context/ToastContext';
@@ -26,7 +30,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../..
 import { LocationAutocomplete } from '../../components/common/LocationAutocomplete';
 import { TripRouteMap, MapWaypoint } from '../../components/common/TripRouteMap';
 import { RouteCalculationResult } from '../../services/routing.service';
-import { GeocodedPlace } from '../../services/geocoding.service';
+import { reverseGeocode, GeocodedPlace } from '../../services/geocoding.service';
 
 interface StopItem {
   name: string;
@@ -35,14 +39,16 @@ interface StopItem {
   coordinates?: [number, number]; // [lng, lat]
 }
 
+type PinDropTarget = 'none' | 'origin' | 'destination' | number;
+
 export const TripCreatePage: React.FC = () => {
   const navigate = useNavigate();
   const { success, error } = useToast();
   const queryClient = useQueryClient();
 
-  // Location state with real geocoded coordinates
-  const [sourceName, setSourceName] = useState('KIET Group of Institutions, Ghaziabad');
-  const [sourceCoords, setSourceCoords] = useState<[number, number]>([77.4977, 28.7532]); // Default KIET coordinates
+  // Location state with real geocoded coordinates (Fresh on mount)
+  const [sourceName, setSourceName] = useState('');
+  const [sourceCoords, setSourceCoords] = useState<[number, number] | undefined>(undefined);
 
   const [destName, setDestName] = useState('');
   const [destCoords, setDestCoords] = useState<[number, number] | undefined>(undefined);
@@ -56,6 +62,9 @@ export const TripCreatePage: React.FC = () => {
   const [availableSeats, setAvailableSeats] = useState<number>(3);
   const [notes, setNotes] = useState('');
   const [stops, setStops] = useState<StopItem[]>([]);
+
+  // Pin Dropper Mode state ('none' means map clicks won't accidentally drop pins)
+  const [pinDropMode, setPinDropMode] = useState<PinDropTarget>('none');
 
   // Preferences
   const [genderPref, setGenderPref] = useState<'any' | 'same_gender'>('any');
@@ -73,15 +82,57 @@ export const TripCreatePage: React.FC = () => {
     setRouteStats(stats);
   }, []);
 
-  const handleMapClick = useCallback((lat: number, lng: number) => {
-    if (!sourceCoords) {
-      setSourceName(`Custom Origin (${lat.toFixed(3)}, ${lng.toFixed(3)})`);
-      setSourceCoords([lng, lat]);
-    } else if (!destCoords) {
-      setDestName(`Selected Destination (${lat.toFixed(3)}, ${lng.toFixed(3)})`);
-      setDestCoords([lng, lat]);
+  // Swap Origin and Destination
+  const handleSwapOriginDestination = () => {
+    const tempName = sourceName;
+    const tempCoords = sourceCoords;
+    setSourceName(destName);
+    setSourceCoords(destCoords);
+    setDestName(tempName);
+    setDestCoords(tempCoords);
+  };
+
+  // 1-Tap Reset entire route
+  const handleResetRoute = () => {
+    setSourceName('');
+    setSourceCoords(undefined);
+    setDestName('');
+    setDestCoords(undefined);
+    setStops([]);
+    setRouteStats(null);
+    setPinDropMode('none');
+  };
+
+  // Handle clicking on map when Pin Placement Mode is active
+  const handleMapClick = useCallback(async (lat: number, lng: number) => {
+    if (pinDropMode === 'none') return; // Do nothing if not in placement mode (avoids accidental clicks)
+
+    let locationLabel = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    try {
+      const place = await reverseGeocode(lat, lng);
+      if (place?.name) {
+        locationLabel = place.name;
+      }
+    } catch (err) {
+      console.warn('Reverse geocode error:', err);
     }
-  }, [sourceCoords, destCoords]);
+
+    if (pinDropMode === 'origin') {
+      setSourceName(locationLabel);
+      setSourceCoords([lng, lat]);
+    } else if (pinDropMode === 'destination') {
+      setDestName(locationLabel);
+      setDestCoords([lng, lat]);
+    } else if (typeof pinDropMode === 'number') {
+      setStops((prev) =>
+        prev.map((s, idx) =>
+          idx === pinDropMode ? { ...s, name: locationLabel, coordinates: [lng, lat] } : s
+        )
+      );
+    }
+
+    setPinDropMode('none'); // Turn off after placing pin
+  }, [pinDropMode]);
 
   // Build waypoints array for live map rendering
   const mapWaypoints: MapWaypoint[] = useMemo(() => {
@@ -130,6 +181,7 @@ export const TripCreatePage: React.FC = () => {
 
   const handleRemoveStop = (index: number) => {
     setStops((prev) => prev.filter((_, i) => i !== index));
+    if (pinDropMode === index) setPinDropMode('none');
   };
 
   const handleStopChange = (
@@ -138,198 +190,251 @@ export const TripCreatePage: React.FC = () => {
     value: string | number | [number, number]
   ) => {
     setStops((prev) => {
-      const next = [...prev];
-      next[index] = { ...next[index], [field]: value };
-      return next;
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
     });
   };
+
+  const estimatedPerSeatCost = useMemo(() => {
+    if (!enableCostSharing || availableSeats <= 0 || !estimatedCost) return 0;
+    return Math.round(estimatedCost / (availableSeats + 1));
+  }, [enableCostSharing, availableSeats, estimatedCost]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!sourceName.trim() || !destName.trim()) {
-      error('Missing Route', 'Please select both an Origin and a Destination.');
+    if (!sourceName.trim()) {
+      error('Please select an origin departure location');
       return;
     }
 
-    // Default fallback coordinates if user typed custom string without selecting autocomplete
-    const finalSourceCoords = sourceCoords || [77.4977, 28.7532];
-    const finalDestCoords = destCoords || [77.2090, 28.6139]; // Default New Delhi center if unresolved
+    if (!destName.trim()) {
+      error('Please select a destination');
+      return;
+    }
+
+    const payload = {
+      source: {
+        name: sourceName,
+        coordinates: sourceCoords || [77.4977, 28.7532],
+      },
+      destination: {
+        name: destName,
+        coordinates: destCoords || [77.3153, 28.6469],
+      },
+      intermediateStops: stops
+        .filter((s) => s.name.trim() !== '')
+        .map((s, idx) => ({
+          name: s.name,
+          sequenceNumber: idx + 1,
+          estimatedArrivalTime: s.estimatedArrivalTime,
+          coordinates: s.coordinates,
+        })),
+      departureTime: new Date(`${travelDate}T${departureTime}:00.000Z`).toISOString(),
+      transportType,
+      availableSeats: Number(availableSeats),
+      notes: notes.trim() || undefined,
+      genderPreference: genderPref,
+      conversationPreference: conversationPref,
+      costSharing: enableCostSharing
+        ? {
+            enabled: true,
+            totalEstimatedExpense: Number(estimatedCost),
+            perSeatCost: estimatedPerSeatCost,
+          }
+        : { enabled: false },
+      routeGeometry: routeStats
+        ? {
+            distanceKm: routeStats.distanceKm,
+            durationMinutes: Math.round(routeStats.durationSeconds / 60),
+            polylineCoordinates: routeStats.coordinates,
+          }
+        : undefined,
+    };
 
     setIsLoading(true);
-
     try {
-      const validStops = stops
-        .filter((s) => s.name.trim().length > 0)
-        .map((s, idx) => ({
-          name: s.name.trim(),
-          normalizedName: s.name.toLowerCase().trim(),
-          coordinates: {
-            type: 'Point' as const,
-            coordinates: s.coordinates || [finalSourceCoords[0], finalSourceCoords[1]],
-          },
-          sequenceNumber: idx + 1,
-          estimatedArrivalTime: s.estimatedArrivalTime || undefined,
-        }));
-
-      const payload = {
-        source: {
-          name: sourceName.trim(),
-          normalizedName: sourceName.toLowerCase().trim(),
-          coordinates: {
-            type: 'Point',
-            coordinates: finalSourceCoords,
-          },
-        },
-        destination: {
-          name: destName.trim(),
-          normalizedName: destName.toLowerCase().trim(),
-          coordinates: {
-            type: 'Point',
-            coordinates: finalDestCoords,
-          },
-        },
-        travelDate,
-        departureTime: departureTime || undefined,
-        transportType,
-        availableSeats: Number(availableSeats) || undefined,
-        stops: validStops.length > 0 ? validStops : undefined,
-        notes: notes.trim() || undefined,
-        preferences: {
-          genderPreference: genderPref,
-          conversationPreference: conversationPref,
-        },
-        costSharing: enableCostSharing
-          ? {
-              enabled: true,
-              estimatedTotalCost: Number(estimatedCost) || 0,
-              currency: 'INR',
-            }
-          : undefined,
-      };
-
-      const res = await apiClient.post('/trips', payload);
-      const tripId = res.data.data.id;
-      success('Trip Published Successfully!', 'Your travel plan is live and matching commuters.');
-      queryClient.invalidateQueries({ queryKey: ['trips-list'] });
-      queryClient.invalidateQueries({ queryKey: ['my-trips-dashboard'] });
-      navigate(`/matches?tripId=${tripId}`);
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        error('Failed to publish trip', err.message);
-      } else {
-        error('Failed to create trip', 'Please review the input form.');
+      const response = await apiClient.post('/trips', payload);
+      if (response.data.success) {
+        success('Trip published successfully! Smart Matching is now active.');
+        queryClient.invalidateQueries({ queryKey: ['trips'] });
+        navigate('/trips');
       }
+    } catch (err: any) {
+      error(err?.response?.data?.message || 'Failed to publish trip. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Calculate dynamic per-person split estimate
-  const estimatedPerSeatCost = useMemo(() => {
-    if (!enableCostSharing || !estimatedCost) return 0;
-    const totalPeople = (Number(availableSeats) || 1) + 1; // driver/creator + available seats
-    return Math.round(estimatedCost / totalPeople);
-  }, [enableCostSharing, estimatedCost, availableSeats]);
-
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-12">
-      {/* Header */}
-      <div>
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-emerald-400">
-          <Navigation className="w-4 h-4" /> Smart Route Planner
+    <div className="space-y-6 animate-in fade-in duration-300 pb-12 max-w-7xl mx-auto">
+      {/* Header Banner */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
+        <div>
+          <div className="flex items-center gap-2 text-indigo-400 text-xs font-semibold uppercase tracking-wider mb-1">
+            <Navigation className="w-3.5 h-3.5" />
+            <span>Smart Route Planner</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-100 tracking-tight">
+            Publish a Trip
+          </h1>
+          <p className="text-sm text-slate-400 mt-1">
+            Select your departure, intermediate pickup gates, and destination with real road route preview.
+          </p>
         </div>
-        <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-1">
-          Publish a Trip
-        </h1>
-        <p className="text-xs sm:text-sm text-slate-400 mt-1">
-          Select your departure, intermediate pickup gates, and destination with real road route preview.
-        </p>
       </div>
 
-      {/* Split-Screen Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Form Controls (7 cols) */}
+        {/* Left Column: Trip Details Form (7 cols) */}
         <form onSubmit={handleSubmit} className="lg:col-span-7 space-y-6">
           {/* 1. Origin & Destination Route Card */}
-          <Card className="glass-card">
-            <CardHeader>
-              <CardTitle className="text-base font-bold flex items-center gap-2">
-                <MapPin className="w-5 h-5 text-emerald-400" /> Route & Schedule
-              </CardTitle>
-              <CardDescription>
-                Search campus gates, metro stations, airports, or pick up spots in India
-              </CardDescription>
+          <Card className="glass-card overflow-visible">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-bold flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-emerald-400" /> Route & Schedule
+                </CardTitle>
+                <CardDescription>
+                  Search campus gates, metro stations, airports, or pick up spots in India
+                </CardDescription>
+              </div>
+
+              {(sourceName || destName || stops.length > 0) && (
+                <button
+                  type="button"
+                  onClick={handleResetRoute}
+                  className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 transition-all flex items-center gap-1.5 active:scale-95"
+                  title="Clear all route fields"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Reset</span>
+                </button>
+              )}
             </CardHeader>
 
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 overflow-visible">
               {/* Origin Search */}
-              <LocationAutocomplete
-                label="Origin / Departure Location"
-                placeholder="E.g. KIET Campus, Ghaziabad"
-                value={sourceName}
-                selectedCoordinates={sourceCoords}
-                onChange={(name, coords) => {
-                  setSourceName(name);
-                  if (coords) setSourceCoords(coords);
-                }}
-                required
-              />
+              <div className="space-y-1.5">
+                <LocationAutocomplete
+                  label="Origin / Departure Location"
+                  placeholder="E.g. KIET Campus, Ghaziabad"
+                  value={sourceName}
+                  selectedCoordinates={sourceCoords}
+                  onChange={(name, coords) => {
+                    setSourceName(name);
+                    if (coords) setSourceCoords(coords);
+                  }}
+                  required
+                />
 
-              {/* Origin Quick Presets */}
-              <div className="flex flex-wrap items-center gap-1.5 -mt-2">
-                <span className="text-[10px] uppercase font-semibold text-slate-500 mr-1">Quick Select:</span>
+                {/* Origin Quick Actions: Presets + Pick on Map */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setPinDropMode(pinDropMode === 'origin' ? 'none' : 'origin')}
+                    className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 active:scale-95 ${
+                      pinDropMode === 'origin'
+                        ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/30'
+                        : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30'
+                    }`}
+                  >
+                    <Crosshair className="w-3 h-3" />
+                    <span>{pinDropMode === 'origin' ? '📍 Clicking on Map...' : '📍 Pick on Map'}</span>
+                  </button>
+
+                  <span className="text-slate-600 text-xs mx-0.5">|</span>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSourceName('KIET Group of Institutions, Ghaziabad');
+                      setSourceCoords([77.4984, 28.7533]);
+                    }}
+                    className="px-2 py-0.5 rounded-lg text-[11px] font-medium bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/60 transition-all active:scale-95"
+                  >
+                    🎓 KIET Campus
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSourceName('Shaheed Sthal (New Bus Adda) Metro');
+                      setSourceCoords([77.4248, 28.6713]);
+                    }}
+                    className="px-2 py-0.5 rounded-lg text-[11px] font-medium bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/60 transition-all active:scale-95"
+                  >
+                    🚇 Shaheed Sthal
+                  </button>
+                </div>
+              </div>
+
+              {/* Direction Swap Button */}
+              <div className="flex items-center justify-center my-0.5">
                 <button
                   type="button"
-                  onClick={() => {
-                    if (navigator.geolocation) {
-                      navigator.geolocation.getCurrentPosition((pos) => {
-                        const lat = pos.coords.latitude;
-                        const lng = pos.coords.longitude;
-                        setSourceName(`Current GPS Location (${lat.toFixed(3)}, ${lng.toFixed(3)})`);
-                        setSourceCoords([lng, lat]);
-                      });
-                    }
-                  }}
-                  className="px-2 py-0.5 rounded-lg text-[11px] font-medium bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 transition-all flex items-center gap-1 active:scale-95"
+                  onClick={handleSwapOriginDestination}
+                  className="px-3 py-1 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60 shadow-sm transition-all active:scale-95 flex items-center gap-1.5 text-xs font-semibold"
+                  title="Swap Origin and Destination"
                 >
-                  <Navigation className="w-3 h-3 text-indigo-400" />
-                  <span>📍 My Location</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSourceName('KIET Group of Institutions, Ghaziabad');
-                    setSourceCoords([77.4984, 28.7533]);
-                  }}
-                  className="px-2 py-0.5 rounded-lg text-[11px] font-medium bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/60 transition-all active:scale-95"
-                >
-                  🎓 KIET Campus
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSourceName('Shaheed Sthal (New Bus Adda) Metro');
-                    setSourceCoords([77.4248, 28.6713]);
-                  }}
-                  className="px-2 py-0.5 rounded-lg text-[11px] font-medium bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/60 transition-all active:scale-95"
-                >
-                  🚇 Shaheed Sthal
+                  <ArrowUpDown className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Swap Direction</span>
                 </button>
               </div>
 
               {/* Destination Search */}
-              <LocationAutocomplete
-                label="Destination Location"
-                placeholder="E.g. Anand Vihar ISBT / New Delhi"
-                value={destName}
-                selectedCoordinates={destCoords}
-                onChange={(name, coords) => {
-                  setDestName(name);
-                  if (coords) setDestCoords(coords);
-                }}
-                required
-              />
+              <div className="space-y-1.5">
+                <LocationAutocomplete
+                  label="Destination Location"
+                  placeholder="E.g. Anand Vihar ISBT / New Delhi"
+                  value={destName}
+                  selectedCoordinates={destCoords}
+                  onChange={(name, coords) => {
+                    setDestName(name);
+                    if (coords) setDestCoords(coords);
+                  }}
+                  required
+                />
+
+                {/* Destination Quick Actions: Presets + Pick on Map */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setPinDropMode(pinDropMode === 'destination' ? 'none' : 'destination')}
+                    className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 active:scale-95 ${
+                      pinDropMode === 'destination'
+                        ? 'bg-rose-500 text-white shadow-md shadow-rose-500/30'
+                        : 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30'
+                    }`}
+                  >
+                    <Crosshair className="w-3 h-3" />
+                    <span>{pinDropMode === 'destination' ? '📍 Clicking on Map...' : '📍 Pick on Map'}</span>
+                  </button>
+
+                  <span className="text-slate-600 text-xs mx-0.5">|</span>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDestName('Anand Vihar ISBT / Railway Terminal');
+                      setDestCoords([77.3153, 28.6469]);
+                    }}
+                    className="px-2 py-0.5 rounded-lg text-[11px] font-medium bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/60 transition-all active:scale-95"
+                  >
+                    🚆 Anand Vihar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDestName('IGI Airport Terminal 3, New Delhi');
+                      setDestCoords([77.0854, 28.5562]);
+                    }}
+                    className="px-2 py-0.5 rounded-lg text-[11px] font-medium bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/60 transition-all active:scale-95"
+                  >
+                    ✈️ IGI Airport
+                  </button>
+                </div>
+              </div>
 
               {/* Date, Time, Transport Mode */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
@@ -348,6 +453,7 @@ export const TripCreatePage: React.FC = () => {
                   value={departureTime}
                   onChange={(e) => setDepartureTime(e.target.value)}
                   leftIcon={<Clock className="w-4 h-4 text-slate-400" />}
+                  required
                 />
 
                 <Select
@@ -356,22 +462,20 @@ export const TripCreatePage: React.FC = () => {
                   onChange={(e) => setTransportType(e.target.value)}
                   options={[
                     { value: 'cab', label: '🚖 Cab / Rideshare' },
-                    { value: 'personal_vehicle', label: '🚗 Personal Car / Bike' },
-                    { value: 'train', label: '🚆 Train / Metro' },
-                    { value: 'bus', label: '🚌 Bus' },
-                    { value: 'flight', label: '✈️ Flight' },
-                    { value: 'other', label: '🚲 Other' },
+                    { value: 'carpool', label: '🚗 Personal Car' },
+                    { value: 'auto', label: '🛺 Auto Rickshaw' },
+                    { value: 'metro_walk', label: '🚇 Metro + Walking' },
                   ]}
                 />
               </div>
 
-              {/* Intermediate Stops Accordion */}
-              <div className="pt-4 border-t border-slate-800 space-y-3">
+              {/* Intermediate Pickup Stops Section (Clean, Non-Collapsing Design) */}
+              <div className="pt-3 border-t border-slate-800/80 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-300 block">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300">
                       Intermediate Pickup Stops
-                    </span>
+                    </h4>
                     <span className="text-[11px] text-slate-400">
                       Add metro stations or highway crossings along your commute
                     </span>
@@ -393,21 +497,55 @@ export const TripCreatePage: React.FC = () => {
                     {stops.map((stop, idx) => (
                       <div
                         key={idx}
-                        className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center gap-2"
+                        className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2 relative"
+                        style={{ zIndex: 40 - idx }}
                       >
-                        <div className="flex-1">
-                          <LocationAutocomplete
-                            placeholder={`Stop #${idx + 1} Name`}
-                            value={stop.name}
-                            selectedCoordinates={stop.coordinates}
-                            onChange={(name, coords) => {
-                              handleStopChange(idx, 'name', name);
-                              if (coords) handleStopChange(idx, 'coordinates', coords);
-                            }}
-                          />
+                        {/* Stop Header */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                              Stop #{idx + 1}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setPinDropMode(pinDropMode === idx ? 'none' : idx)}
+                              className={`px-2 py-0.5 rounded-md text-[10px] font-semibold transition-all flex items-center gap-1 active:scale-95 ${
+                                pinDropMode === idx
+                                  ? 'bg-sky-500 text-slate-950 shadow-sm shadow-sky-500/30'
+                                  : 'bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border border-sky-500/25'
+                              }`}
+                            >
+                              <Crosshair className="w-2.5 h-2.5" />
+                              <span>{pinDropMode === idx ? '📍 Click Map' : '📍 Pick on Map'}</span>
+                            </button>
+                          </div>
+
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="danger"
+                            onClick={() => handleRemoveStop(idx)}
+                            className="p-1.5 h-7 w-7 rounded-lg"
+                            title="Remove Stop"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        {/* Stop Inputs */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">
+                          <div className="sm:col-span-2">
+                            <LocationAutocomplete
+                              placeholder={`Stop #${idx + 1} Name`}
+                              value={stop.name}
+                              selectedCoordinates={stop.coordinates}
+                              onChange={(name, coords) => {
+                                handleStopChange(idx, 'name', name);
+                                if (coords) handleStopChange(idx, 'coordinates', coords);
+                              }}
+                            />
+                          </div>
+
                           <Input
                             type="time"
                             placeholder="ETA"
@@ -415,18 +553,7 @@ export const TripCreatePage: React.FC = () => {
                             onChange={(e) =>
                               handleStopChange(idx, 'estimatedArrivalTime', e.target.value)
                             }
-                            className="w-28 shrink-0"
                           />
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="danger"
-                            onClick={() => handleRemoveStop(idx)}
-                            className="shrink-0 p-2.5 rounded-xl"
-                            title="Remove Stop"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
                         </div>
                       </div>
                     ))}
@@ -473,28 +600,23 @@ export const TripCreatePage: React.FC = () => {
                     setConversationPref(e.target.value as 'quiet' | 'moderate' | 'chatty')
                   }
                   options={[
+                    { value: 'quiet', label: '🎧 Quiet & Focused' },
                     { value: 'moderate', label: '☕ Moderate & Friendly' },
-                    { value: 'quiet', label: '🎧 Quiet / Studying' },
                     { value: 'chatty', label: '💬 Chatty & Social' },
                   ]}
                 />
               </div>
 
-              {/* Dynamic Fare Splitting Toggle */}
-              <div className="pt-4 border-t border-slate-800 space-y-3">
-                <div className="flex items-center justify-between p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                      <DollarSign className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <span className="text-sm font-bold text-slate-200 block">
-                        Dynamic Cost Sharing
-                      </span>
-                      <span className="text-xs text-slate-400">
-                        Calculates instant per-person shares for cab fares, fuel, and tolls.
-                      </span>
-                    </div>
+              {/* Cost Splitting */}
+              <div className="pt-2 border-t border-slate-800/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-200">
+                      Dynamic Cost Sharing
+                    </h4>
+                    <p className="text-xs text-slate-400">
+                      Evenly divides total travel expense across all companion seats
+                    </p>
                   </div>
                   <input
                     type="checkbox"
@@ -579,7 +701,34 @@ export const TripCreatePage: React.FC = () => {
               </CardDescription>
             </CardHeader>
 
-            <CardContent className="p-3 pt-0">
+            <CardContent className="p-3 pt-0 space-y-2">
+              {/* Active Pin Placement Banner (Appears only when user clicks 'Pick on Map') */}
+              {pinDropMode !== 'none' && (
+                <div className="p-2.5 rounded-xl bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-between text-xs text-indigo-200 animate-in fade-in duration-150">
+                  <div className="flex items-center gap-2">
+                    <Crosshair className="w-4 h-4 text-indigo-400 animate-pulse" />
+                    <span>
+                      Click anywhere on the map to set{' '}
+                      <strong className="text-white capitalize">
+                        {pinDropMode === 'origin'
+                          ? 'Origin'
+                          : pinDropMode === 'destination'
+                          ? 'Destination'
+                          : `Stop #${Number(pinDropMode) + 1}`}
+                      </strong>
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPinDropMode('none')}
+                    className="p-1 hover:bg-indigo-500/30 rounded-lg text-indigo-300 hover:text-white transition"
+                    title="Cancel pin placement"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
               {/* Main Interactive Map Component */}
               <TripRouteMap
                 waypoints={mapWaypoints}
