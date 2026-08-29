@@ -373,7 +373,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
       ? { lat: validPoints[0].latitude, lng: validPoints[0].longitude }
       : { lat: 28.6139, lng: 77.209 };
 
-    if (!googleMapInstance.current) {
+    if (!googleMapInstance.current || !googleMapRef.current.hasChildNodes()) {
       googleMapInstance.current = new win.google.maps.Map(googleMapRef.current, {
         center: initialCenter,
         zoom: 12,
@@ -391,6 +391,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
         styles: tileTheme === 'dark' ? GOOGLE_DARK_STYLE : undefined,
         mapTypeId: tileTheme === 'satellite' ? win.google.maps.MapTypeId.HYBRID : win.google.maps.MapTypeId.ROADMAP,
       });
+      win.google.maps.event.trigger(map, 'resize');
     }
 
     const map = googleMapInstance.current;
@@ -468,12 +469,15 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
       path.forEach((pt) => bounds.extend(pt));
     }
 
-    if (validPoints.length > 1 || (routeResult && routeResult.coordinates.length > 1)) {
-      map.fitBounds(bounds);
-    } else if (validPoints.length === 1) {
-      map.setCenter({ lat: validPoints[0].latitude, lng: validPoints[0].longitude });
-      map.setZoom(14);
-    }
+    setTimeout(() => {
+      if (validPoints.length > 1 || (routeResult && routeResult.coordinates.length > 1)) {
+        map.fitBounds(bounds);
+      } else if (validPoints.length === 1) {
+        map.setCenter({ lat: validPoints[0].latitude, lng: validPoints[0].longitude });
+        map.setZoom(14);
+      }
+      win.google.maps.event.trigger(map, 'resize');
+    }, 60);
   }, [engine, isGoogleLoaded, waypoints, routeResult, tileTheme, interactive]);
 
   const defaultCenter: [number, number] = useMemo(() => {
@@ -610,12 +614,15 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
       )}
 
       {/* Render Google Maps Engine */}
-      {engine === 'google' && googleApiKey && (
-        <div ref={googleMapRef} className="w-full h-full min-h-[240px]" />
+      {googleApiKey && (
+        <div
+          ref={googleMapRef}
+          className={`w-full h-full min-h-[240px] ${engine === 'google' ? 'block' : 'hidden'}`}
+        />
       )}
 
       {/* Render Fallback Leaflet Map Engine */}
-      {(engine === 'leaflet' || !googleApiKey) && (
+      <div className={`w-full h-full min-h-[240px] ${engine === 'leaflet' || !googleApiKey ? 'block' : 'hidden'}`}>
         <MapContainer
           center={defaultCenter}
           zoom={12}
@@ -720,7 +727,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
             );
           })}
         </MapContainer>
-      )}
+      </div>
     </div>
   );
 };
