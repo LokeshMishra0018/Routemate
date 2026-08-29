@@ -82,3 +82,25 @@ export const refreshTokenSchema = z.object({
 export const googleAuthSchema = z.object({
   idToken: z.string().min(1, 'Google ID token is required'),
 });
+
+export const adminProvisionSchema = z.object({
+  adminPasscode: z.string().min(1, 'Admin passcode is required'),
+  fullName: z
+    .string()
+    .min(2, 'Full name must be at least 2 characters')
+    .max(100, 'Full name cannot exceed 100 characters')
+    .trim(),
+  email: z
+    .string()
+    .email('Invalid email address')
+    .max(255)
+    .transform((val) => val.toLowerCase().trim()),
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters long')
+    .max(128, 'Password cannot exceed 128 characters')
+    .regex(/[A-Za-z]/, 'Password must contain at least one letter')
+    .regex(/[0-9]/, 'Password must contain at least one number'),
+});
+
+export type AdminProvisionDto = z.infer<typeof adminProvisionSchema>;

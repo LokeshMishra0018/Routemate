@@ -660,6 +660,76 @@ export class AuthService {
       user: userDto,
     };
   }
+
+  /**
+   * Controlled admin provisioning of a student account with any email.
+   * Requires matching ADMIN_PROVISION_PASSCODE.
+   * Provisions account with email confirmed, but verificationStatus in 'unverified' (🟡 Student ID Pending).
+   */
+  async adminProvision(input: import('./auth.schemas.js').AdminProvisionDto) {
+    const env = getEnv();
+    const correctPasscode = env.ADMIN_PROVISION_PASSCODE || 'routemate2026';
+
+    if (input.adminPasscode !== correctPasscode) {
+      throw new UnauthorizedError('Invalid admin provision passcode. Access denied.');
+    }
+
+    const emailNormalized = input.email.toLowerCase().trim();
+
+    // Check if user already exists
+    const existing = await usersRepository.findUserByEmailNormalized(emailNormalized);
+    if (existing) {
+      throw new ConflictError('An account with this email address already exists. Please log in.');
+    }
+
+    // Resolve college (try domain match, otherwise default to primary campus like KIET)
+    let college;
+    try {
+      college = await collegesService.resolveCollegeByEmail(emailNormalized);
+    } catch {
+      college = await collegesService.resolveDefaultCollege();
+    }
+
+    const passwordHash = await hashPassword(input.password);
+    const now = new Date();
+
+    const userId = await usersRepository.createUser({
+      email: input.email.trim(),
+      emailNormalized,
+      passwordHash,
+      role: 'student',
+      status: 'active',
+      emailVerifiedAt: now, // Email confirmed
+      emailVerificationTokenHash: null,
+      emailVerificationExpiresAt: null,
+      passwordResetTokenHash: null,
+      passwordResetExpiresAt: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await usersRepository.createProfile({
+      userId,
+      fullName: input.fullName.trim(),
+      collegeId: college.id,
+      verificationStatus: 'unverified', // 🟡 Yellow Tick (ID Pending)
+      trustScore: 50,
+      averageRating: 5.0,
+      completedTripCount: 0,
+      connectionCount: 0,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    return {
+      userId,
+      email: input.email.trim(),
+      college: { id: college.id, name: college.name, domain: college.domain },
+      verificationStatus: 'unverified',
+      verificationTier: 'id_pending',
+      message: 'Student account provisioned successfully in verification pending phase (🟡 Yellow Tick). You can now sign in with your email.',
+    };
+  }
 }
 
 export const authService = new AuthService();

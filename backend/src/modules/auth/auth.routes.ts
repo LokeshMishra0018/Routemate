@@ -9,6 +9,7 @@ import {
   resetPasswordSchema,
   refreshTokenSchema,
   googleAuthSchema,
+  adminProvisionSchema,
 } from './auth.schemas.js';
 import { validateRequest } from '../../plugins/validation.js';
 import { createSuccessResponse } from '../../utils/response.js';
@@ -135,6 +136,18 @@ export const authRoutes: FastifyPluginAsync = async (app: FastifyInstance): Prom
     async (request, reply) => {
       const result = await authService.resetPassword(request.body as any);
       return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
+
+  // POST /api/v1/auth/admin-provision
+  app.post(
+    '/admin-provision',
+    {
+      preValidation: [validateRequest({ body: adminProvisionSchema })],
+    },
+    async (request, reply) => {
+      const result = await authService.adminProvision(request.body as any);
+      return reply.status(201).send(createSuccessResponse(result));
     }
   );
 };

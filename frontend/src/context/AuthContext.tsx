@@ -10,6 +10,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<User>;
   loginWithGoogle: (idToken: string) => Promise<User>;
   register: (data: { email: string; password: string; fullName: string; collegeId?: string }) => Promise<{ userId: string }>;
+  adminProvision?: (data: { adminPasscode: string; email: string; password: string; fullName: string }) => Promise<{ userId: string; email: string; message: string }>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   updateProfileState: (updated: Partial<UserProfile>) => void;
@@ -113,6 +114,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return res.data.data;
   };
 
+  const adminProvision = async (data: { adminPasscode: string; email: string; password: string; fullName: string }) => {
+    const res = await apiClient.post('/auth/admin-provision', data);
+    return res.data.data;
+  };
+
   const logout = async () => {
     try {
       await apiClient.post('/auth/logout');
@@ -139,10 +145,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         profile,
         isLoading,
-        isAuthenticated: !!user,
+        isAuthenticated: Boolean(user),
         login,
         loginWithGoogle,
         register,
+        adminProvision,
         logout,
         refreshProfile,
         updateProfileState,

@@ -50,6 +50,27 @@ export class CollegesService {
       isActive: college.isActive,
     };
   }
+
+  /**
+   * Resolves the primary/default active college for guest or provisioned student users
+   */
+  async resolveDefaultCollege(): Promise<CollegeResponseDto> {
+    const active = await collegesRepository.findAllActive();
+    if (active.length > 0) {
+      return {
+        id: active[0]._id.toHexString(),
+        name: active[0].name,
+        domain: active[0].domain,
+        isActive: active[0].isActive,
+      };
+    }
+    return {
+      id: 'default_campus',
+      name: 'KIET Group of Institutions',
+      domain: 'kiet.edu',
+      isActive: true,
+    };
+  }
 }
 
 export const collegesService = new CollegesService();

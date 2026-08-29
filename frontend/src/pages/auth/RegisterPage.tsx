@@ -171,7 +171,13 @@ export const RegisterPage: React.FC = () => {
         </form>
       </CardContent>
 
-      <CardFooter className="justify-center border-t border-slate-800/80 pt-4">
+      <CardFooter className="border-t border-slate-800/80 pt-4 flex items-center justify-between">
+        <Link
+          to="/login"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/30 text-[11px] font-bold transition-all cursor-pointer"
+        >
+          <span>👑 Admin / Guest Access</span>
+        </Link>
         <p className="text-xs text-slate-400">
           Already registered?{' '}
           <Link to="/login" className="font-bold text-indigo-400 hover:text-indigo-300 transition-colors">
