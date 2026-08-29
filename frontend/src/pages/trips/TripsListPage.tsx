@@ -18,7 +18,9 @@ import {
   Search,
   X,
   SlidersHorizontal,
+  Navigation,
 } from 'lucide-react';
+import { calculateHaversineKm } from '../../services/routing.service';
 import { useAuth } from '../../context/AuthContext';
 import { apiClient } from '../../services/api.client';
 import { Trip, Connection } from '../../types';
@@ -507,6 +509,27 @@ export const TripsListPage: React.FC = () => {
                         <span className="text-xs font-bold text-slate-100">{trip.destination.name}</span>
                       </div>
                     </div>
+
+                    {(() => {
+                      const srcCoords = trip.source?.coordinates?.coordinates;
+                      const dstCoords = trip.destination?.coordinates?.coordinates;
+                      if (!srcCoords || !dstCoords) return null;
+                      const dist = calculateHaversineKm(srcCoords[1], srcCoords[0], dstCoords[1], dstCoords[0]);
+                      if (!dist || dist <= 0) return null;
+
+                      return (
+                        <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-slate-800/80 text-slate-400">
+                          <span className="flex items-center gap-1 text-sky-400 font-medium font-mono">
+                            <Navigation className="w-3 h-3" /> ~{dist} km
+                          </span>
+                          {trip.stops && trip.stops.length > 0 && (
+                            <span className="text-slate-400">
+                              {trip.stops.length} pickup stop{trip.stops.length > 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Trip meta */}

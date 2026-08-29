@@ -31,6 +31,9 @@ import { Textarea } from '../../components/ui/Select';
 import { TrustScoreMeter } from '../../components/ui/TrustScoreMeter';
 import { LoadingSpinner, ErrorState } from '../../components/ui/EmptyState';
 import { formatTime, formatIndianCurrency } from '../../lib/utils';
+import { TripRouteMap, MapWaypoint } from '../../components/common/TripRouteMap';
+import { TripPickupTimeline } from '../../components/common/TripPickupTimeline';
+import { Navigation } from 'lucide-react';
 
 export const TripDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -140,6 +143,44 @@ export const TripDetailPage: React.FC = () => {
   const isOutgoingPending = isPending && connection?.requesterId === user?.id;
   const isIncomingPending = isPending && connection?.recipientId === user?.id;
 
+  // Build waypoints for map
+  const mapWaypoints: MapWaypoint[] = React.useMemo(() => {
+    if (!trip) return [];
+    const list: MapWaypoint[] = [];
+
+    const srcCoords = (trip.source as any)?.coordinates?.coordinates || [77.4977, 28.7532];
+    list.push({
+      name: trip.source.name,
+      latitude: srcCoords[1],
+      longitude: srcCoords[0],
+      type: 'origin',
+    });
+
+    if (trip.stops && trip.stops.length > 0) {
+      trip.stops.forEach((stop, idx) => {
+        const stopCoords = (stop as any)?.coordinates?.coordinates || [srcCoords[0] + (idx + 1) * 0.02, srcCoords[1] + (idx + 1) * 0.02];
+        list.push({
+          name: stop.name,
+          latitude: stopCoords[1],
+          longitude: stopCoords[0],
+          type: 'stop',
+          sequenceNumber: stop.sequenceNumber || idx + 1,
+          info: stop.estimatedArrivalTime ? `ETA: ${formatTime(stop.estimatedArrivalTime)}` : undefined,
+        });
+      });
+    }
+
+    const dstCoords = (trip.destination as any)?.coordinates?.coordinates || [77.2090, 28.6139];
+    list.push({
+      name: trip.destination.name,
+      latitude: dstCoords[1],
+      longitude: dstCoords[0],
+      type: 'destination',
+    });
+
+    return list;
+  }, [trip]);
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Top Navigation */}
@@ -246,27 +287,41 @@ export const TripDetailPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Stops Timeline */}
-        {trip.stops && trip.stops.length > 0 && (
-          <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-              Transit Stops & Waypoints
+        {/* Interactive Map Visualizer */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+              <Navigation className="w-3.5 h-3.5 text-indigo-400" /> Interactive Route Map
             </span>
-            <div className="flex flex-col gap-2 pt-1">
-              {trip.stops.map((stop, idx) => (
-                <div key={idx} className="flex items-center gap-3 text-xs text-slate-300">
-                  <span className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center font-bold text-indigo-400 shrink-0">
-                    {idx + 1}
-                  </span>
-                  <span className="font-semibold text-slate-100">{stop.name}</span>
-                  {stop.estimatedArrivalTime && (
-                    <span className="text-slate-400">({formatTime(stop.estimatedArrivalTime)})</span>
-                  )}
-                </div>
-              ))}
-            </div>
           </div>
-        )}
+          <TripRouteMap
+            waypoints={mapWaypoints}
+            className="h-80 w-full rounded-xl border border-slate-800"
+            showStatsHud={true}
+          />
+        </div>
+
+        {/* Stops & Milestones Timeline */}
+        <TripPickupTimeline
+          source={{
+            name: trip.source.name,
+            coordinates: (trip.source as any)?.coordinates,
+          }}
+          destination={{
+            name: trip.destination.name,
+            coordinates: (trip.destination as any)?.coordinates,
+          }}
+          departureTime={formatTime(trip.departureTime) || undefined}
+          stops={
+            trip.stops?.map((s, idx) => ({
+              name: s.name,
+              sequenceNumber: s.sequenceNumber || idx + 1,
+              estimatedArrivalTime: s.estimatedArrivalTime ? formatTime(s.estimatedArrivalTime) : null,
+              passengerName: tripAcceptedConnections[idx]?.requester?.fullName || null,
+              coordinates: (s as any)?.coordinates,
+            })) || []
+          }
+        />
 
         {/* Schedule & Metadata Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-slate-800">
