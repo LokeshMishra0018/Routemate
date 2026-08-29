@@ -6,6 +6,10 @@ export interface CurvePoint {
   value: number;
   hour?: number;
   fullDate?: string;
+  isoTime?: string;
+  minsAgo?: number;
+  hoursAgo?: number;
+  daysAgo?: number;
 }
 
 interface InteractiveTrendCurveProps {
@@ -31,7 +35,7 @@ export const InteractiveTrendCurve: React.FC<InteractiveTrendCurveProps> = ({
   allTimePeakDate,
   currentLive,
 }) => {
-  const [activeTab, setActiveTab] = useState<'1h' | '24h' | '7d' | '30d'>('24h');
+  const [activeTab, setActiveTab] = useState<'1h' | '24h' | '7d' | '30d'>('1h');
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -66,6 +70,62 @@ export const InteractiveTrendCurve: React.FC<InteractiveTrendCurveProps> = ({
       return { x, y, data: d, index };
     });
   }, [activeData, chartWidth, chartHeight, minValue, range]);
+
+  // Helper to format local time strings in the user's browser timezone
+  const formatAxisLabel = (point: CurvePoint, isLast: boolean, isFirst: boolean) => {
+    if (isLast) return activeTab === '7d' || activeTab === '30d' ? '🟢 Today' : '🟢 Now';
+    if (!point.isoTime) return point.label;
+
+    const date = new Date(point.isoTime);
+    if (activeTab === '1h') {
+      return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+    }
+    if (activeTab === '24h') {
+      return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+    }
+    if (activeTab === '7d') {
+      return date.toLocaleDateString([], { weekday: 'short' });
+    }
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  };
+
+  const getTooltipInfo = (point: CurvePoint, isLast: boolean) => {
+    const date = point.isoTime ? new Date(point.isoTime) : new Date();
+    const exactLocalTime = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
+
+    if (isLast) {
+      return {
+        title: `${point.value} Live Now`,
+        subtitle: `Current Time • ${exactLocalTime}`,
+        isLive: true,
+      };
+    }
+
+    if (activeTab === '1h') {
+      const timeStr = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+      return {
+        title: `${point.value} Active`,
+        subtitle: `${point.minsAgo ?? 5}m ago • ${timeStr}`,
+        isLive: false,
+      };
+    }
+
+    if (activeTab === '24h') {
+      const timeStr = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+      return {
+        title: `${point.value} Active`,
+        subtitle: `${point.hoursAgo ?? 1}h ago • ${timeStr}`,
+        isLive: false,
+      };
+    }
+
+    const dateStr = date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+    return {
+      title: `${point.value} Active`,
+      subtitle: dateStr,
+      isLive: false,
+    };
+  };
 
   // Generate smooth SVG cubic bezier path
   const svgPath = useMemo(() => {
@@ -114,12 +174,9 @@ export const InteractiveTrendCurve: React.FC<InteractiveTrendCurveProps> = ({
   };
 
   const currentHoveredPoint = hoverIndex !== null && points[hoverIndex] ? points[hoverIndex] : null;
-  const peakPoint = useMemo(() => {
-    if (points.length === 0) return null;
-    return points.reduce((prev, curr) => (curr.data.value >= prev.data.value ? curr : prev), points[0]);
-  }, [points]);
-
   const activeTarget = hoverIndex !== null ? currentHoveredPoint : (points.length > 0 ? points[points.length - 1] : null);
+  const isLastPoint = activeTarget ? activeTarget.index === points.length - 1 : false;
+  const tooltipData = activeTarget ? getTooltipInfo(activeTarget.data, isLastPoint) : null;
 
   return (
     <div className="bg-slate-900/80 rounded-2xl border border-slate-800/90 p-5 space-y-4 shadow-2xl backdrop-blur-md relative overflow-hidden">
@@ -145,13 +202,13 @@ export const InteractiveTrendCurve: React.FC<InteractiveTrendCurveProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Real-time active student presence with live interactive telemetry scrubber
+                Real-time active student presence synchronized to your local timezone with 5-minute telemetry steps
               </p>
             </div>
           </div>
         </div>
 
-        {/* Timeframe Switcher Tabs & Live Mini Badge */}
+        {/* Timeframe Switcher Tabs */}
         <div className="flex items-center gap-2 flex-wrap self-start lg:self-auto">
           <div className="flex items-center gap-1 bg-slate-950/90 p-1 rounded-xl border border-slate-800/90 shadow-inner">
             <button
@@ -163,7 +220,7 @@ export const InteractiveTrendCurve: React.FC<InteractiveTrendCurveProps> = ({
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              1 Hour
+              1 Hour (5m steps)
             </button>
             <button
               type="button"
@@ -307,7 +364,7 @@ export const InteractiveTrendCurve: React.FC<InteractiveTrendCurveProps> = ({
           )}
 
           {/* Laser Scrubber Guide Bar & Illuminated Hover Tooltip */}
-          {activeTarget && (
+          {activeTarget && tooltipData && (
             <g transform={`translate(${activeTarget.x}, ${activeTarget.y})`}>
               {/* Vertical Laser Scrubber Guide Line */}
               <line
@@ -329,10 +386,10 @@ export const InteractiveTrendCurve: React.FC<InteractiveTrendCurveProps> = ({
               <g transform="translate(0, 28)">
                 <path d="M 0 -8 L -6 0 L 6 0 Z" fill="#030712" stroke="#475569" strokeWidth="1" />
                 <rect
-                  x="-52"
+                  x="-62"
                   y="0"
-                  width="104"
-                  height="36"
+                  width="124"
+                  height="38"
                   rx="8"
                   fill="#030712"
                   fillOpacity="0.95"
@@ -344,28 +401,28 @@ export const InteractiveTrendCurve: React.FC<InteractiveTrendCurveProps> = ({
                   x="0"
                   y="16"
                   textAnchor="middle"
-                  fill={activeTarget.data.label === 'Now' ? '#34d399' : '#fbbf24'}
+                  fill={tooltipData.isLive ? '#34d399' : '#fbbf24'}
                   fontSize="12"
                   fontWeight="900"
                   fontFamily="monospace"
                 >
-                  {activeTarget.data.value.toLocaleString()} {activeTarget.data.label === 'Now' ? 'Live Now' : 'Active'}
+                  {tooltipData.title}
                 </text>
                 <text
                   x="0"
-                  y="29"
+                  y="30"
                   textAnchor="middle"
                   fill="#94a3b8"
                   fontSize="9"
                   fontWeight="bold"
                 >
-                  {activeTarget.data.fullDate || (activeTarget.data.label === 'Now' ? 'Current Moment' : activeTarget.data.label)}
+                  {tooltipData.subtitle}
                 </text>
               </g>
             </g>
           )}
 
-          {/* X-Axis Timeline Labels */}
+          {/* X-Axis Timeline Labels formatted in User's Local Browser Time */}
           {points.map((p, i) => {
             const isLast = i === points.length - 1;
             const isFirst = i === 0;
@@ -391,7 +448,7 @@ export const InteractiveTrendCurve: React.FC<InteractiveTrendCurveProps> = ({
                 fontWeight={isLast ? '900' : 'bold'}
                 fontFamily="sans-serif"
               >
-                {isLast ? `🟢 ${p.data.label}` : p.data.label}
+                {formatAxisLabel(p.data, isLast, isFirst)}
               </text>
             );
           })}

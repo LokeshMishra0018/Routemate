@@ -752,14 +752,11 @@ export class AdminService {
         ]);
 
         const pointTime = new Date(now.getTime() - minsAgo * 60 * 1000);
-        const timeLabel =
-          i === 11
-            ? 'Now'
-            : pointTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 
         return {
-          label: timeLabel,
-          fullDate: pointTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          label: i === 11 ? 'Now' : `${minsAgo}m ago`,
+          isoTime: pointTime.toISOString(),
+          minsAgo,
           value: i === 11 ? currentLive : uniqueUserIds.size,
         };
       })
@@ -790,13 +787,11 @@ export class AdminService {
         ]);
 
         const pointTime = new Date(now.getTime() - hoursAgo * 60 * 60 * 1000);
-        const timeLabel =
-          i === 23
-            ? 'Now'
-            : pointTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 
         return {
-          label: timeLabel,
+          label: i === 23 ? 'Now' : `${hoursAgo}h ago`,
+          isoTime: pointTime.toISOString(),
+          hoursAgo,
           hour: pointTime.getHours(),
           value: i === 23 ? currentLive : uniqueUserIds.size,
         };
@@ -835,6 +830,8 @@ export class AdminService {
         return {
           label: i === 6 ? 'Today' : dayNames[dStart.getDay()],
           fullDate: `${dStart.getDate()} ${dStart.toLocaleString('default', { month: 'short' })}`,
+          isoTime: dStart.toISOString(),
+          daysAgo,
           value: i === 6 ? Math.max(activeUsersToday, currentLive) : uniqueUserIds.size,
         };
       })
@@ -870,6 +867,8 @@ export class AdminService {
 
         return {
           label: `${dStart.getDate()} ${dStart.toLocaleString('default', { month: 'short' })}`,
+          isoTime: dStart.toISOString(),
+          daysAgo,
           value: i === 29 ? Math.max(activeUsersToday, currentLive) : uniqueUserIds.size,
         };
       })

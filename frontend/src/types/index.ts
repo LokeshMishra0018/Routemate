@@ -454,10 +454,10 @@ export interface AdminOverviewStats {
     };
   };
   trendCurves?: {
-    hours1: Array<{ label: string; fullDate?: string; value: number }>;
-    hours24: Array<{ label: string; value: number; hour: number }>;
-    days7: Array<{ label: string; fullDate: string; value: number }>;
-    days30: Array<{ label: string; value: number }>;
+    hours1: Array<{ label: string; isoTime?: string; minsAgo?: number; value: number }>;
+    hours24: Array<{ label: string; isoTime?: string; hoursAgo?: number; value: number; hour?: number }>;
+    days7: Array<{ label: string; fullDate?: string; isoTime?: string; daysAgo?: number; value: number }>;
+    days30: Array<{ label: string; isoTime?: string; daysAgo?: number; value: number }>;
   };
 }
 
