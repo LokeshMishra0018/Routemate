@@ -529,19 +529,32 @@ export class AuthService {
       throw new UnauthorizedError('Google account email is not verified');
     }
 
-    // 2. Strict Institutional Domain Restriction: Must match an active partner college domain (e.g. @kiet.edu)
-    let college;
-    try {
-      college = await collegesService.resolveCollegeByEmail(email);
-    } catch {
-      throw new ForbiddenError(
-        'Access restricted: Institutional Google Sign-In is only allowed for @kiet.edu student accounts.'
-      );
-    }
-
     const emailNormalized = email;
     let user = await usersRepository.findUserByEmailNormalized(emailNormalized);
     const now = new Date();
+
+    let college;
+    if (user) {
+      const profile = await usersRepository.findProfileByUserId(user._id.toHexString());
+      if (profile?.collegeId) {
+        try {
+          college = await collegesService.getCollegeById(profile.collegeId);
+        } catch {
+          college = await collegesService.resolveDefaultCollege();
+        }
+      } else {
+        college = await collegesService.resolveDefaultCollege();
+      }
+    } else {
+      // 2. Strict Institutional Domain Restriction: Must match an active partner college domain (e.g. @kiet.edu)
+      try {
+        college = await collegesService.resolveCollegeByEmail(email);
+      } catch {
+        throw new ForbiddenError(
+          'Access restricted: Institutional Google Sign-In is only allowed for @kiet.edu student accounts. For personal accounts, please use the Admin & Guest Access option with the security password.'
+        );
+      }
+    }
 
     if (!user) {
       // 3. Auto-provision new student account
@@ -655,31 +668,336 @@ export class AuthService {
     };
 
     return {
-      accessToken,
-      refreshToken: rawToken,
+      tokens: {
+        accessToken,
+        refreshToken: rawToken,
+      },
       user: userDto,
     };
   }
 
   /**
-   * Controlled admin provisioning of a student account with any email.
-   * Requires matching dynamic ADMIN_PROVISION_PASSWORD.
-   * Provisions account with email confirmed, but verificationStatus in 'unverified' (🟡 Student ID Pending).
+   * Helper to verify dynamic admin security password
    */
-  async adminProvision(input: import('./auth.schemas.js').AdminProvisionDto) {
+  private async verifyAdminSecurityPassword(provided: string): Promise<void> {
     const env = getEnv();
     const fallbackPassword = env.ADMIN_PROVISION_PASSWORD || 'routemate2026';
 
-    // 1. Check MongoDB for dynamic security password if configured by admin
     const db = (await import('../../db/mongo.js')).getDb();
     const settingDoc = await db.collection((await import('../../db/collections.js')).COLLECTIONS.SYSTEM_SETTINGS).findOne({
       key: 'admin_provision_password',
     });
     const correctPassword = settingDoc?.value || fallbackPassword;
 
-    if (input.adminPassword !== correctPassword) {
+    if (!provided || provided.trim() !== correctPassword.trim()) {
       throw new UnauthorizedError('Invalid admin security password. Access denied.');
     }
+  }
+
+  /**
+   * Controlled admin provisioning step 1: Validate Admin Password and Send 6-Digit OTP to Email
+   */
+  async adminProvisionSendOtp(input: import('./auth.schemas.js').AdminProvisionSendOtpDto) {
+    await this.verifyAdminSecurityPassword(input.adminPassword);
+
+    const emailNormalized = input.email.toLowerCase().trim();
+    const existing = await usersRepository.findUserByEmailNormalized(emailNormalized);
+
+    const rawOtp = generateNumericOtp(6);
+    const verificationTokenHash = hashToken(rawOtp);
+    const verificationExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const now = new Date();
+
+    if (existing) {
+      if (existing.emailVerifiedAt) {
+        throw new ConflictError('An account with this email address already exists. Please log in.');
+      }
+
+      const passwordHash = await hashPassword(input.password);
+      await usersRepository.updateUser(existing._id.toHexString(), {
+        passwordHash,
+        emailVerificationTokenHash: verificationTokenHash,
+        emailVerificationExpiresAt: verificationExpiresAt,
+        updatedAt: now,
+      });
+
+      const profile = await usersRepository.findProfileByUserId(existing._id.toHexString());
+      if (profile) {
+        await usersRepository.updateProfile(profile._id.toHexString(), {
+          fullName: input.fullName.trim(),
+          updatedAt: now,
+        });
+      }
+    } else {
+      let college;
+      try {
+        college = await collegesService.resolveCollegeByEmail(emailNormalized);
+      } catch {
+        college = await collegesService.resolveDefaultCollege();
+      }
+
+      const passwordHash = await hashPassword(input.password);
+      const createdUser = await usersRepository.createUser({
+        email: input.email.trim(),
+        emailNormalized,
+        passwordHash,
+        role: 'student',
+        status: 'active',
+        emailVerifiedAt: null,
+        emailVerificationTokenHash: verificationTokenHash,
+        emailVerificationExpiresAt: verificationExpiresAt,
+        passwordResetTokenHash: null,
+        passwordResetExpiresAt: null,
+        lastLoginAt: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      await usersRepository.createProfile({
+        userId: createdUser._id.toHexString(),
+        fullName: input.fullName.trim(),
+        collegeId: college.id,
+        academicYear: null,
+        gender: null,
+        bio: null,
+        avatarUrl: null,
+        verificationStatus: 'unverified',
+        trustScore: 50,
+        averageRating: 5.0,
+        completedTripCount: 0,
+        connectionCount: 0,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    const emailProvider = getEmailProvider();
+    emailProvider.sendVerificationEmail(input.email, rawOtp, input.fullName).catch((err) => {
+      console.error('[EMAIL][ERROR] Failed to send verification OTP email:', err);
+    });
+
+    return {
+      success: true,
+      email: input.email.trim(),
+      message: 'A 6-digit verification code has been sent to your email address.',
+    };
+  }
+
+  /**
+   * Controlled admin provisioning step 2: Verify 6-digit OTP and activate account
+   */
+  async adminProvisionVerifyOtp(input: import('./auth.schemas.js').AdminProvisionVerifyOtpDto) {
+    await this.verifyAdminSecurityPassword(input.adminPassword);
+
+    const emailNormalized = input.email.toLowerCase().trim();
+    const user = await usersRepository.findUserByEmailNormalized(emailNormalized);
+
+    if (!user) {
+      throw new ValidationError('User account not found. Please initiate registration again.');
+    }
+
+    const tokenHash = hashToken(input.otp.trim());
+    if (
+      user.emailVerificationTokenHash !== tokenHash ||
+      !user.emailVerificationExpiresAt ||
+      user.emailVerificationExpiresAt < new Date()
+    ) {
+      throw new ValidationError('Invalid or expired 6-digit verification OTP code.');
+    }
+
+    const now = new Date();
+    await usersRepository.updateUser(user._id.toHexString(), {
+      emailVerifiedAt: now,
+      emailVerificationTokenHash: null,
+      emailVerificationExpiresAt: null,
+      updatedAt: now,
+    });
+
+    return {
+      success: true,
+      userId: user._id.toHexString(),
+      email: user.email,
+      verificationStatus: 'unverified',
+      verificationTier: 'id_pending',
+      message: 'Email address verified and account activated successfully (🟡 ID Pending phase). You can now log in.',
+    };
+  }
+
+  /**
+   * Controlled admin provisioning with Google OAuth:
+   * Validates Admin Security Password + Google token, auto-provisions personal Google account in ID Pending phase
+   */
+  async adminProvisionGoogle(input: import('./auth.schemas.js').AdminProvisionGoogleDto) {
+    await this.verifyAdminSecurityPassword(input.adminPassword);
+
+    if (!input.idToken || !input.idToken.trim()) {
+      throw new ValidationError('Invalid Google ID token');
+    }
+
+    let googlePayload: {
+      email?: string;
+      email_verified?: boolean | string;
+      name?: string;
+      picture?: string;
+      sub?: string;
+    };
+
+    if (input.idToken.startsWith('mock-google-token:')) {
+      const email = input.idToken.replace('mock-google-token:', '').trim();
+      googlePayload = {
+        email,
+        email_verified: true,
+        name: email.split('@')[0],
+      };
+    } else {
+      try {
+        const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(input.idToken)}`);
+        if (!response.ok) {
+          throw new UnauthorizedError('Google authentication failed: Invalid or expired ID token');
+        }
+        googlePayload = (await response.json()) as any;
+      } catch (err: unknown) {
+        if (err instanceof UnauthorizedError) throw err;
+        throw new UnauthorizedError('Unable to verify Google authentication token');
+      }
+    }
+
+    const email = (googlePayload.email || '').toLowerCase().trim();
+    const isEmailVerified = googlePayload.email_verified === true || googlePayload.email_verified === 'true';
+
+    if (!email || !isEmailVerified) {
+      throw new UnauthorizedError('Google account email is not verified');
+    }
+
+    const emailNormalized = email;
+    let user = await usersRepository.findUserByEmailNormalized(emailNormalized);
+    const now = new Date();
+
+    let college;
+    try {
+      college = await collegesService.resolveCollegeByEmail(emailNormalized);
+    } catch {
+      college = await collegesService.resolveDefaultCollege();
+    }
+
+    if (!user) {
+      const randomPassword = generateRandomToken(32);
+      const passwordHash = await hashPassword(randomPassword);
+
+      user = await usersRepository.createUser({
+        email,
+        emailNormalized,
+        passwordHash,
+        role: 'student',
+        status: 'active',
+        emailVerifiedAt: now,
+        emailVerificationTokenHash: null,
+        emailVerificationExpiresAt: null,
+        passwordResetTokenHash: null,
+        passwordResetExpiresAt: null,
+        lastLoginAt: now,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      await usersRepository.createProfile({
+        userId: user._id.toHexString(),
+        fullName: (googlePayload.name || email.split('@')[0]).trim(),
+        collegeId: college.id,
+        academicYear: null,
+        gender: null,
+        bio: null,
+        avatarUrl: googlePayload.picture || null,
+        verificationStatus: 'unverified',
+        trustScore: 50,
+        averageRating: 5.0,
+        completedTripCount: 0,
+        connectionCount: 0,
+        createdAt: now,
+        updatedAt: now,
+      });
+    } else {
+      if (user.status === 'suspended') {
+        throw new ForbiddenError('Your account has been suspended. Please contact support.');
+      }
+
+      await usersRepository.updateUser(user._id.toHexString(), {
+        lastLoginAt: now,
+        emailVerifiedAt: user.emailVerifiedAt || now,
+      });
+    }
+
+    const userId = user._id.toHexString();
+
+    const accessToken = generateAccessToken({
+      userId,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+    });
+
+    const { rawToken, tokenHash, expiresAt } = generateRefreshToken();
+    await usersRepository.createSession({
+      userId,
+      refreshTokenHash: tokenHash,
+      deviceInfo: 'Google Sign-In (Guest Provisioned)',
+      ipMetadata: undefined,
+      expiresAt,
+      revokedAt: null,
+      createdAt: now,
+      lastUsedAt: now,
+    });
+
+    const profile = await usersRepository.findProfileByUserId(userId);
+    let collegeName = college.name;
+    let collegeDomain = college.domain;
+    if (profile?.collegeId && profile.collegeId !== college.id) {
+      try {
+        const c = await collegesService.getCollegeById(profile.collegeId);
+        collegeName = c.name;
+        collegeDomain = c.domain;
+      } catch {}
+    }
+
+    const userDto: UserProfileDto = {
+      id: userId,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      emailVerified: true,
+      profile: {
+        fullName: profile?.fullName || (googlePayload.name || email.split('@')[0]),
+        collegeId: profile?.collegeId || college.id,
+        collegeName,
+        collegeDomain,
+        academicYear: profile?.academicYear || null,
+        gender: profile?.gender || null,
+        bio: profile?.bio || null,
+        avatarUrl: profile?.avatarUrl || googlePayload.picture || null,
+        verificationStatus: profile?.verificationStatus || 'unverified',
+        verificationTier: computeVerificationTier(true, profile?.verificationStatus, user.role),
+        trustScore: profile?.trustScore || 50,
+        averageRating: profile?.averageRating || 5.0,
+        completedTripCount: profile?.completedTripCount || 0,
+        connectionCount: profile?.connectionCount || 0,
+        createdAt: profile?.createdAt?.toISOString() || now.toISOString(),
+      },
+    };
+
+    return {
+      tokens: {
+        accessToken,
+        refreshToken: rawToken,
+      },
+      user: userDto,
+    };
+  }
+
+  /**
+   * Controlled admin direct provisioning of a student account with any email.
+   */
+  async adminProvision(input: import('./auth.schemas.js').AdminProvisionDto) {
+    await this.verifyAdminSecurityPassword(input.adminPassword);
 
     const emailNormalized = input.email.toLowerCase().trim();
 

@@ -35,9 +35,20 @@ declare global {
 interface GoogleSignInButtonProps {
   mode?: 'signin' | 'signup';
   onError?: (msg: string) => void;
+  onCustomAuth?: (credential: string) => Promise<void>;
+  buttonText?: string;
+  allowAnyDomain?: boolean;
+  customButtonId?: string;
 }
 
-export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({ mode = 'signin', onError }) => {
+export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
+  mode = 'signin',
+  onError,
+  onCustomAuth,
+  buttonText,
+  allowAnyDomain = false,
+  customButtonId = 'google-signin-rendered-button',
+}) => {
   const { loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -49,13 +60,21 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({ mode = '
   const handleCredentialResponse = async (credential: string) => {
     setIsLoading(true);
     try {
-      await loginWithGoogle(credential);
+      if (onCustomAuth) {
+        await onCustomAuth(credential);
+      } else {
+        await loginWithGoogle(credential);
+      }
       navigate(from, { replace: true });
     } catch (err: unknown) {
       if (err instanceof Error) {
         onError?.(err.message);
       } else {
-        onError?.('Google authentication failed. Please make sure you use an official @kiet.edu account.');
+        onError?.(
+          allowAnyDomain
+            ? 'Google authentication failed. Please verify your admin security password.'
+            : 'Google authentication failed. Please make sure you use an official @kiet.edu account.'
+        );
       }
     } finally {
       setIsLoading(false);
@@ -84,10 +103,10 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({ mode = '
         window.google.accounts.id.initialize({
           client_id: googleClientId,
           callback: (res) => handleCredentialResponse(res.credential),
-          hosted_domain: 'kiet.edu',
+          ...(allowAnyDomain ? {} : { hosted_domain: 'kiet.edu' }),
         });
 
-        const buttonContainer = document.getElementById('google-signin-rendered-button');
+        const buttonContainer = document.getElementById(customButtonId);
         if (buttonContainer) {
           buttonContainer.innerHTML = '';
           window.google.accounts.id.renderButton(buttonContainer, {
@@ -102,7 +121,7 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({ mode = '
         console.error('Google Identity Services initialization error:', err);
       }
     }
-  }, [googleClientId, mode]);
+  }, [googleClientId, mode, allowAnyDomain, customButtonId]);
 
   // Fallback direct button (if googleClientId is not configured or in dev testing)
   const handleDirectClick = async () => {
@@ -115,15 +134,17 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({ mode = '
       }
     }
 
-    // In local dev without Google Client ID, prompt user for a test KIET email
-    const studentEmail = window.prompt(
-      'Google Sign-In (@kiet.edu):\nEnter your KIET college email address to sign in instantly (e.g. yourname.21b@kiet.edu):',
-      'lokesh.mishra22@kiet.edu'
-    );
+    // In local dev without Google Client ID, prompt user
+    const defaultEmail = allowAnyDomain ? 'friend.traveler@gmail.com' : 'lokesh.mishra22@kiet.edu';
+    const promptMsg = allowAnyDomain
+      ? 'Google Sign-In (Guest / Personal):\nEnter any Gmail / personal email address:'
+      : 'Google Sign-In (@kiet.edu):\nEnter your KIET college email address (e.g. yourname.21b@kiet.edu):';
+
+    const studentEmail = window.prompt(promptMsg, defaultEmail);
 
     if (!studentEmail) return;
 
-    if (!studentEmail.toLowerCase().endsWith('@kiet.edu')) {
+    if (!allowAnyDomain && !studentEmail.toLowerCase().endsWith('@kiet.edu')) {
       onError?.('Access restricted: Only official @kiet.edu college accounts are permitted.');
       return;
     }
@@ -131,10 +152,16 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({ mode = '
     await handleCredentialResponse(`mock-google-token:${studentEmail.trim()}`);
   };
 
+  const defaultLabel = allowAnyDomain
+    ? 'Continue with Google (Guest Account)'
+    : mode === 'signup'
+    ? 'Sign up with KIET Google Account'
+    : 'Continue with KIET Google Account';
+
   return (
     <div className="w-full space-y-2">
       {googleClientId ? (
-        <div id="google-signin-rendered-button" className="w-full flex justify-center min-h-[44px]"></div>
+        <div id={customButtonId} className="w-full flex justify-center min-h-[44px]"></div>
       ) : null}
 
       {(!googleClientId || isLoading) && (
@@ -162,7 +189,7 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({ mode = '
               d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
             />
           </svg>
-          <span>{isLoading ? 'Authenticating with Google...' : mode === 'signup' ? 'Sign up with KIET Google Account' : 'Continue with KIET Google Account'}</span>
+          <span>{isLoading ? 'Authenticating with Google...' : buttonText || defaultLabel}</span>
         </button>
       )}
     </div>

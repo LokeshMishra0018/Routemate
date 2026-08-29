@@ -10,6 +10,9 @@ import {
   refreshTokenSchema,
   googleAuthSchema,
   adminProvisionSchema,
+  adminProvisionSendOtpSchema,
+  adminProvisionVerifyOtpSchema,
+  adminProvisionGoogleSchema,
 } from './auth.schemas.js';
 import { validateRequest } from '../../plugins/validation.js';
 import { createSuccessResponse } from '../../utils/response.js';
@@ -139,7 +142,43 @@ export const authRoutes: FastifyPluginAsync = async (app: FastifyInstance): Prom
     }
   );
 
-  // POST /api/v1/auth/admin-provision
+  // POST /api/v1/auth/admin-provision/send-otp
+  app.post(
+    '/admin-provision/send-otp',
+    {
+      preValidation: [validateRequest({ body: adminProvisionSendOtpSchema })],
+    },
+    async (request, reply) => {
+      const result = await authService.adminProvisionSendOtp(request.body as any);
+      return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
+
+  // POST /api/v1/auth/admin-provision/verify-otp
+  app.post(
+    '/admin-provision/verify-otp',
+    {
+      preValidation: [validateRequest({ body: adminProvisionVerifyOtpSchema })],
+    },
+    async (request, reply) => {
+      const result = await authService.adminProvisionVerifyOtp(request.body as any);
+      return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
+
+  // POST /api/v1/auth/admin-provision/google
+  app.post(
+    '/admin-provision/google',
+    {
+      preValidation: [validateRequest({ body: adminProvisionGoogleSchema })],
+    },
+    async (request, reply) => {
+      const result = await authService.adminProvisionGoogle(request.body as any);
+      return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
+
+  // POST /api/v1/auth/admin-provision (Direct provisioning)
   app.post(
     '/admin-provision',
     {

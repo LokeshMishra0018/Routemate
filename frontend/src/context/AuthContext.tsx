@@ -11,6 +11,9 @@ interface AuthContextType {
   loginWithGoogle: (idToken: string) => Promise<User>;
   register: (data: { email: string; password: string; fullName: string; collegeId?: string }) => Promise<{ userId: string }>;
   adminProvision?: (data: { adminPassword?: string; adminPasscode?: string; email: string; password: string; fullName: string }) => Promise<{ userId: string; email: string; message: string }>;
+  adminProvisionSendOtp?: (data: { adminPassword: string; email: string; password: string; fullName: string }) => Promise<{ success: boolean; email: string; message: string }>;
+  adminProvisionVerifyOtp?: (data: { adminPassword: string; email: string; otp: string }) => Promise<{ success: boolean; userId: string; message: string }>;
+  adminProvisionGoogle?: (adminPassword: string, idToken: string) => Promise<User>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   updateProfileState: (updated: Partial<UserProfile>) => void;
@@ -122,6 +125,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return res.data.data;
   };
 
+  const adminProvisionSendOtp = async (data: { adminPassword: string; email: string; password: string; fullName: string }) => {
+    const res = await apiClient.post('/auth/admin-provision/send-otp', data);
+    return res.data.data;
+  };
+
+  const adminProvisionVerifyOtp = async (data: { adminPassword: string; email: string; otp: string }) => {
+    const res = await apiClient.post('/auth/admin-provision/verify-otp', data);
+    return res.data.data;
+  };
+
+  const adminProvisionGoogle = async (adminPassword: string, idToken: string) => {
+    setIsLoading(true);
+    try {
+      const res = await apiClient.post('/auth/admin-provision/google', { adminPassword, idToken });
+      const { user: loggedUser, tokens, profile: userProfile } = res.data.data;
+      const accessToken = tokens?.accessToken || res.data.data.accessToken;
+      setAuthToken(accessToken);
+      const userObj = {
+        id: loggedUser.id,
+        email: loggedUser.email,
+        role: loggedUser.role,
+        status: loggedUser.status,
+        emailVerified: loggedUser.emailVerified,
+        fullName: loggedUser.profile?.fullName,
+        avatarUrl: loggedUser.profile?.avatarUrl,
+        collegeId: loggedUser.profile?.collegeId,
+        collegeName: loggedUser.profile?.collegeName || loggedUser.profile?.college?.name,
+        trustScore: loggedUser.profile?.trustScore,
+        verificationStatus: loggedUser.profile?.verificationStatus,
+      };
+      setUser(userObj as any);
+      setProfile(userProfile || loggedUser.profile || null);
+      return loggedUser;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const logout = async () => {
     try {
       await apiClient.post('/auth/logout');
@@ -153,6 +194,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginWithGoogle,
         register,
         adminProvision,
+        adminProvisionSendOtp,
+        adminProvisionVerifyOtp,
+        adminProvisionGoogle,
         logout,
         refreshProfile,
         updateProfileState,

@@ -113,4 +113,44 @@ export const adminProvisionSchema = z
     path: ['adminPassword'],
   });
 
+export const adminProvisionSendOtpSchema = adminProvisionSchema;
+
+export const adminProvisionVerifyOtpSchema = z
+  .object({
+    adminPassword: z.string().optional(),
+    adminPasscode: z.string().optional(),
+    email: z
+      .string()
+      .email('Invalid email address')
+      .max(255)
+      .transform((val) => val.toLowerCase().trim()),
+    otp: z.string().min(4, 'OTP must be at least 4 digits').max(8, 'OTP cannot exceed 8 digits').trim(),
+  })
+  .transform((data) => ({
+    ...data,
+    adminPassword: (data.adminPassword || data.adminPasscode || '').trim(),
+  }))
+  .refine((data) => data.adminPassword.length > 0, {
+    message: 'Admin security password is required',
+    path: ['adminPassword'],
+  });
+
+export const adminProvisionGoogleSchema = z
+  .object({
+    adminPassword: z.string().optional(),
+    adminPasscode: z.string().optional(),
+    idToken: z.string().min(1, 'Google ID token is required'),
+  })
+  .transform((data) => ({
+    ...data,
+    adminPassword: (data.adminPassword || data.adminPasscode || '').trim(),
+  }))
+  .refine((data) => data.adminPassword.length > 0, {
+    message: 'Admin security password is required',
+    path: ['adminPassword'],
+  });
+
 export type AdminProvisionDto = z.infer<typeof adminProvisionSchema>;
+export type AdminProvisionSendOtpDto = z.infer<typeof adminProvisionSendOtpSchema>;
+export type AdminProvisionVerifyOtpDto = z.infer<typeof adminProvisionVerifyOtpSchema>;
+export type AdminProvisionGoogleDto = z.infer<typeof adminProvisionGoogleSchema>;
