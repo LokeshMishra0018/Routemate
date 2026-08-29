@@ -13,7 +13,9 @@ interface InteractiveTrendCurveProps {
   data7d: CurvePoint[];
   data30d: CurvePoint[];
   todayPeak: number;
+  todayPeakTime?: string;
   allTimePeak: number;
+  allTimePeakDate?: string;
   currentLive: number;
 }
 
@@ -22,7 +24,9 @@ export const InteractiveTrendCurve: React.FC<InteractiveTrendCurveProps> = ({
   data7d,
   data30d,
   todayPeak,
+  todayPeakTime,
   allTimePeak,
+  allTimePeakDate,
   currentLive,
 }) => {
   const [activeTab, setActiveTab] = useState<'24h' | '7d' | '30d'>('24h');
@@ -375,9 +379,9 @@ export const InteractiveTrendCurve: React.FC<InteractiveTrendCurveProps> = ({
           <div>
             <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider block">Today's Peak Online</span>
             <span className="text-lg font-black text-amber-300 font-mono mt-0.5 block">
-              {todayPeak} Commuters
+              {todayPeak} {todayPeak === 1 ? 'Commuter' : 'Commuters'}
             </span>
-            <span className="text-[10px] text-slate-500">09:15 AM (Morning Rush)</span>
+            <span className="text-[10px] text-slate-500">{todayPeakTime || 'Active Today'}</span>
           </div>
           <TrendingUp className="w-5 h-5 text-amber-500/40" />
         </div>
@@ -386,9 +390,9 @@ export const InteractiveTrendCurve: React.FC<InteractiveTrendCurveProps> = ({
           <div>
             <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider block">All-Time Peak Record</span>
             <span className="text-lg font-black text-indigo-300 font-mono mt-0.5 block">
-              {allTimePeak} Commuters
+              {allTimePeak} {allTimePeak === 1 ? 'Commuter' : 'Commuters'}
             </span>
-            <span className="text-[10px] text-slate-500">29 Aug 2026</span>
+            <span className="text-[10px] text-slate-500">{allTimePeakDate || 'Platform Record'}</span>
           </div>
           <Sparkles className="w-5 h-5 text-indigo-500/40" />
         </div>

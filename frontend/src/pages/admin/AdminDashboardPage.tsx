@@ -274,11 +274,13 @@ export const AdminDashboardPage: React.FC = () => {
       {/* Zone 2.2: Interactive Peak Online Telemetry Curve & Analytical Donut Charts */}
       <div className="space-y-6">
         <InteractiveTrendCurve
-          data24h={stats.trendCurves?.hours24 || stats.hourlyDemand.map(h => ({ label: h.hour, value: Math.max(1, h.tripsCount * 3), hour: h.hourNum }))}
+          data24h={stats.trendCurves?.hours24 || []}
           data7d={stats.trendCurves?.days7 || []}
           data30d={stats.trendCurves?.days30 || []}
-          todayPeak={stats.peakOnline?.todayPeak || Math.max(stats.users.activeToday, 14)}
-          allTimePeak={stats.peakOnline?.allTimePeak || Math.max(stats.users.total, 42)}
+          todayPeak={stats.peakOnline?.todayPeak ?? 0}
+          todayPeakTime={stats.peakOnline?.todayPeakTime}
+          allTimePeak={stats.peakOnline?.allTimePeak ?? 0}
+          allTimePeakDate={stats.peakOnline?.allTimePeakDate}
           currentLive={stats.peakOnline?.currentLive ?? stats.users.liveOnline}
         />
 
@@ -298,12 +300,12 @@ export const AdminDashboardPage: React.FC = () => {
               },
               {
                 label: 'ID Pending / Guests',
-                value: stats.breakdown?.verifications.pending ?? Math.max(0, stats.users.total - stats.users.verified - 1),
+                value: stats.breakdown?.verifications.pending ?? 0,
                 color: '#f59e0b',
               },
               {
                 label: 'Moderators & Admins',
-                value: stats.breakdown?.verifications.admin ?? 1,
+                value: stats.breakdown?.verifications.admin ?? 0,
                 color: '#a855f7',
               },
             ]}
@@ -316,17 +318,17 @@ export const AdminDashboardPage: React.FC = () => {
             centerLabel="Total Logins"
             centerValue={
               (stats.breakdown?.authMethods.google || 0) +
-              (stats.breakdown?.authMethods.emailPassword || 0) || stats.users.total
+              (stats.breakdown?.authMethods.emailPassword || 0)
             }
             segments={[
               {
                 label: 'Google OAuth',
-                value: stats.breakdown?.authMethods.google ?? Math.round(stats.users.total * 0.4),
+                value: stats.breakdown?.authMethods.google ?? 0,
                 color: '#f43f5e',
               },
               {
                 label: 'Email + Password + OTP',
-                value: stats.breakdown?.authMethods.emailPassword ?? Math.max(1, Math.round(stats.users.total * 0.6)),
+                value: stats.breakdown?.authMethods.emailPassword ?? 0,
                 color: '#6366f1',
               },
             ]}
