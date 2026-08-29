@@ -78,7 +78,7 @@ export const AdminDemandAnalyticsPage: React.FC = () => {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full min-w-[700px] text-left text-xs">
             <thead className="bg-slate-900/90 text-slate-400 font-bold border-b border-slate-800 uppercase text-[10px] tracking-wider">
               <tr>
                 <th className="py-3 px-4">Origin ➔ Destination</th>
