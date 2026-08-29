@@ -214,43 +214,56 @@ export const TripCreatePage: React.FC = () => {
       return;
     }
 
+    const mapTransportType = (type: string): 'train' | 'bus' | 'flight' | 'cab' | 'personal_vehicle' | 'other' => {
+      switch (type) {
+        case 'cab': return 'cab';
+        case 'carpool': return 'personal_vehicle';
+        case 'auto': return 'other';
+        case 'metro_walk': return 'train';
+        default: return 'cab';
+      }
+    };
+
     const payload = {
       source: {
         name: sourceName,
-        coordinates: sourceCoords || [77.4977, 28.7532],
+        coordinates: {
+          type: 'Point' as const,
+          coordinates: sourceCoords || [77.4977, 28.7532],
+        },
       },
       destination: {
         name: destName,
-        coordinates: destCoords || [77.3153, 28.6469],
+        coordinates: {
+          type: 'Point' as const,
+          coordinates: destCoords || [77.3153, 28.6469],
+        },
       },
-      intermediateStops: stops
+      travelDate,
+      departureTime,
+      transportType: mapTransportType(transportType),
+      availableSeats: Number(availableSeats) || 1,
+      stops: stops
         .filter((s) => s.name.trim() !== '')
         .map((s, idx) => ({
           name: s.name,
           sequenceNumber: idx + 1,
-          estimatedArrivalTime: s.estimatedArrivalTime,
-          coordinates: s.coordinates,
+          estimatedArrivalTime: s.estimatedArrivalTime || undefined,
+          coordinates: {
+            type: 'Point' as const,
+            coordinates: s.coordinates || [77.4977, 28.7532],
+          },
         })),
-      departureTime: new Date(`${travelDate}T${departureTime}:00.000Z`).toISOString(),
-      transportType,
-      availableSeats: Number(availableSeats),
+      preferences: {
+        genderPreference: genderPref,
+        conversationPreference: (conversationPref === 'chatty' ? 'talkative' : conversationPref) as 'quiet' | 'moderate' | 'talkative',
+      },
+      costSharing: {
+        enabled: enableCostSharing,
+        estimatedTotalCost: enableCostSharing ? Number(estimatedCost) : undefined,
+        currency: 'INR',
+      },
       notes: notes.trim() || undefined,
-      genderPreference: genderPref,
-      conversationPreference: conversationPref,
-      costSharing: enableCostSharing
-        ? {
-            enabled: true,
-            totalEstimatedExpense: Number(estimatedCost),
-            perSeatCost: estimatedPerSeatCost,
-          }
-        : { enabled: false },
-      routeGeometry: routeStats
-        ? {
-            distanceKm: routeStats.distanceKm,
-            durationMinutes: Math.round(routeStats.durationSeconds / 60),
-            polylineCoordinates: routeStats.coordinates,
-          }
-        : undefined,
     };
 
     setIsLoading(true);
