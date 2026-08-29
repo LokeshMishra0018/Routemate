@@ -280,7 +280,8 @@ export const AdminTripsPage: React.FC = () => {
             <option value="confirmed">Confirmed 📅</option>
             <option value="in_progress">In-Progress 🟢</option>
             <option value="completed">Completed ✅</option>
-            <option value="cancelled">Cancelled ❌</option>
+            <option value="deleted">Deleted by Host 🗑️</option>
+            <option value="cancelled">Cancelled by Admin ❌</option>
           </select>
         </div>
       </div>

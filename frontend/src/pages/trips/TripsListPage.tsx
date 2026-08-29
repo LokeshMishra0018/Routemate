@@ -21,6 +21,7 @@ import {
   Navigation,
   Trash2,
   AlertTriangle,
+  RotateCcw,
 } from 'lucide-react';
 import { calculateHaversineKm } from '../../services/routing.service';
 import { useAuth } from '../../context/AuthContext';
@@ -75,6 +76,30 @@ export const TripsListPage: React.FC = () => {
         type: 'error',
         title: 'Failed to Delete Trip',
         message: err.response?.data?.error?.message || 'Could not delete trip. Please try again.',
+      });
+    },
+  });
+
+  // Restore Trip Mutation for Host
+  const restoreTripMutation = useMutation({
+    mutationFn: async (tripId: string) => {
+      const res = await apiClient.post(`/trips/${tripId}/restore`);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast({
+        type: 'success',
+        title: 'Trip Restored',
+        message: 'Your trip has been reactivated and is now visible in campus search.',
+      });
+      queryClient.invalidateQueries({ queryKey: ['trips-list'] });
+      queryClient.invalidateQueries({ queryKey: ['my-trips-dashboard'] });
+    },
+    onError: (err: any) => {
+      toast({
+        type: 'error',
+        title: 'Failed to Restore Trip',
+        message: err.response?.data?.error?.message || 'Could not restore trip. Please try again.',
       });
     },
   });
@@ -481,19 +506,29 @@ export const TripsListPage: React.FC = () => {
 
                   {/* Status / Ownership Banner Strip */}
                   {isMyTrip ? (
-                    <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-indigo-950/50 border border-indigo-500/30 text-xs">
-                      <span className="flex items-center gap-1.5 font-bold text-indigo-300">
-                        <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                        My Trip
-                      </span>
-                      {myTripAcceptedCompanions.length > 0 ? (
-                        <span className="flex items-center gap-1 font-bold text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded-lg border border-emerald-500/40 text-[11px]">
-                          <Users className="w-3 h-3 text-emerald-400" /> {myTripAcceptedCompanions.length} {myTripAcceptedCompanions.length === 1 ? 'Buddy' : 'Buddies'} Joined
+                    (trip.isDeleted || trip.status === 'cancelled') ? (
+                      <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-rose-950/50 border border-rose-500/40 text-xs">
+                        <span className="flex items-center gap-1.5 font-bold text-rose-300">
+                          <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                          {trip.isDeleted ? 'Deleted by You' : 'Cancelled Trip'}
                         </span>
-                      ) : (
-                        <span className="text-slate-400 text-[11px]">Looking for buddies</span>
-                      )}
-                    </div>
+                        <span className="text-slate-400 text-[11px]">Inactive in Search</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-indigo-950/50 border border-indigo-500/30 text-xs">
+                        <span className="flex items-center gap-1.5 font-bold text-indigo-300">
+                          <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                          My Active Trip
+                        </span>
+                        {myTripAcceptedCompanions.length > 0 ? (
+                          <span className="flex items-center gap-1 font-bold text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded-lg border border-emerald-500/40 text-[11px]">
+                            <Users className="w-3 h-3 text-emerald-400" /> {myTripAcceptedCompanions.length} {myTripAcceptedCompanions.length === 1 ? 'Buddy' : 'Buddies'} Joined
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-[11px]">Looking for buddies</span>
+                        )}
+                      </div>
+                    )
                   ) : isConnected ? (
                     <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-emerald-950/50 border border-emerald-500/40 text-xs text-emerald-300">
                       <span className="flex items-center gap-1.5 font-bold">
@@ -599,35 +634,48 @@ export const TripsListPage: React.FC = () => {
                 {/* Actions Footer */}
                 <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
                   {isMyTrip ? (
-                    <>
-                      <Link to={`/trips/${trip.id}`} className="flex-1">
-                        <Button size="sm" variant="ghost" className="w-full text-xs text-slate-300 hover:text-white border border-slate-800">
-                          Manage
-                        </Button>
-                      </Link>
-                      {myTripAcceptedCompanions.length > 0 ? (
-                        <Link to="/messages" className="flex-1">
-                          <Button size="sm" variant="primary" leftIcon={<MessageSquare className="w-3.5 h-3.5" />} className="w-full text-xs bg-emerald-600 hover:bg-emerald-500 shadow-glow">
-                            Chat ({myTripAcceptedCompanions.length})
-                          </Button>
-                        </Link>
-                      ) : (
-                        <Link to={`/matches?tripId=${trip.id}`} className="flex-1">
-                          <Button size="sm" variant="primary" leftIcon={<Sparkles className="w-3.5 h-3.5" />} className="w-full text-xs shadow-glow">
-                            Matches
-                          </Button>
-                        </Link>
-                      )}
+                    (trip.isDeleted || trip.status === 'cancelled') ? (
                       <Button
                         size="sm"
-                        variant="ghost"
-                        onClick={() => setDeleteModalTrip(trip)}
-                        className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 p-2 border border-rose-500/20 shrink-0"
-                        title="Delete Trip"
+                        variant="primary"
+                        onClick={() => restoreTripMutation.mutate(trip.id)}
+                        isLoading={restoreTripMutation.isPending}
+                        leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
+                        className="w-full text-xs bg-emerald-600 hover:bg-emerald-500 font-bold shadow-glow"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        Restore Trip to Active
                       </Button>
-                    </>
+                    ) : (
+                      <>
+                        <Link to={`/trips/${trip.id}`} className="flex-1">
+                          <Button size="sm" variant="ghost" className="w-full text-xs text-slate-300 hover:text-white border border-slate-800">
+                            Manage
+                          </Button>
+                        </Link>
+                        {myTripAcceptedCompanions.length > 0 ? (
+                          <Link to="/messages" className="flex-1">
+                            <Button size="sm" variant="primary" leftIcon={<MessageSquare className="w-3.5 h-3.5" />} className="w-full text-xs bg-emerald-600 hover:bg-emerald-500 shadow-glow">
+                              Chat ({myTripAcceptedCompanions.length})
+                            </Button>
+                          </Link>
+                        ) : (
+                          <Link to={`/matches?tripId=${trip.id}`} className="flex-1">
+                            <Button size="sm" variant="primary" leftIcon={<Sparkles className="w-3.5 h-3.5" />} className="w-full text-xs shadow-glow">
+                              Matches
+                            </Button>
+                          </Link>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setDeleteModalTrip(trip)}
+                          className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 p-2 border border-rose-500/20 shrink-0"
+                          title="Delete Trip"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </>
+                    )
                   ) : isConnected ? (
                     <>
                       <Link to={`/trips/${trip.id}`} className="flex-1">

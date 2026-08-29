@@ -1108,7 +1108,11 @@ export class AdminService {
     const query: Record<string, any> = {};
 
     if (filters?.status && filters.status !== 'all') {
-      query.status = filters.status;
+      if (filters.status === 'deleted') {
+        query.$or = [{ isDeleted: true }, { deletedBy: 'host' }];
+      } else {
+        query.status = filters.status;
+      }
     }
     if (filters?.vehicleType && filters.vehicleType !== 'all') {
       query.vehicleType = filters.vehicleType;
@@ -1160,6 +1164,11 @@ export class AdminService {
           fareAmount: t.fareEstimate?.amount || 0,
           status: t.status,
           isHidden: t.isHidden === true,
+          isDeleted: t.isDeleted === true,
+          deletedAt: t.deletedAt ? t.deletedAt.toISOString() : null,
+          deletedBy: t.deletedBy || null,
+          cancelledByAdmin: t.cancelledByAdmin === true,
+          cancellationReason: t.cancellationReason || null,
           adminNotes: t.adminNotes || null,
           revisionRequestedAt: t.revisionRequestedAt ? t.revisionRequestedAt.toISOString() : null,
           passengersCount: Math.max(0, (t.totalSeats || 4) - (t.availableSeats || 2)),

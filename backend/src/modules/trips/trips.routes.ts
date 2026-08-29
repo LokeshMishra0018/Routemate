@@ -167,6 +167,13 @@ export const tripsRoutes: FastifyPluginAsync = async (app: FastifyInstance): Pro
     }
   );
 
+  // POST /api/v1/trips/:id/restore - Restore a cancelled or deleted trip (Host owner or Admin)
+  app.post('/:id/restore', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const result = await tripsService.restoreTrip(id, request.user!.id, request.user!.role);
+    return reply.status(200).send(createSuccessResponse(result));
+  });
+
   // DELETE /api/v1/trips/:id - Delete or cancel trip
   app.delete('/:id', async (request, reply) => {
     const { id } = request.params as { id: string };

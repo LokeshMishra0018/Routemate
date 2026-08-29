@@ -219,16 +219,16 @@ export class TripsService {
   }
 
   /**
-   * Restore a deleted or cancelled trip (Admin only)
+   * Restore a deleted or cancelled trip (Host owner or Admin)
    */
-  async restoreTrip(tripId: string, role?: string): Promise<{ message: string }> {
-    if (role !== 'admin') {
-      throw new ForbiddenError('Only campus administrators can restore trips');
-    }
-
+  async restoreTrip(tripId: string, userId?: string, role?: string): Promise<{ message: string }> {
     const trip = await tripsRepository.findTripById(tripId);
     if (!trip) {
       throw new NotFoundError('Trip not found');
+    }
+
+    if (userId && trip.userId !== userId && role !== 'admin') {
+      throw new ForbiddenError('You do not have permission to restore this trip');
     }
 
     await tripsRepository.restoreTrip(tripId);
