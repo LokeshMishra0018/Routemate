@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Compass, Mail, Lock, AlertCircle, ArrowRight, Crown, CheckCircle2, X, KeyRound, User as UserIcon, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -33,6 +33,9 @@ export const LoginPage: React.FC = () => {
   const [provisionError, setProvisionError] = useState<string | null>(null);
   const [provisionSuccess, setProvisionSuccess] = useState<string | null>(null);
   const [isProvisioning, setIsProvisioning] = useState(false);
+
+  const provisionAdminPasswordRef = useRef(provisionAdminPassword);
+  provisionAdminPasswordRef.current = provisionAdminPassword;
 
   // Resend OTP countdown timer
   useEffect(() => {
@@ -71,7 +74,7 @@ export const LoginPage: React.FC = () => {
         throw new Error('Admin provisioning is not currently available.');
       }
       const res = await adminProvisionSendOtp({
-        adminPassword: provisionAdminPassword,
+        adminPassword: provisionAdminPasswordRef.current.trim(),
         fullName: provisionName,
         email: provisionEmail,
         password: provisionUserPassword,
@@ -102,7 +105,7 @@ export const LoginPage: React.FC = () => {
         throw new Error('Admin provisioning verification is not available.');
       }
       const res = await adminProvisionVerifyOtp({
-        adminPassword: provisionAdminPassword,
+        adminPassword: provisionAdminPasswordRef.current.trim(),
         email: provisionEmail,
         otp: provisionOtp.trim(),
       });
@@ -131,7 +134,8 @@ export const LoginPage: React.FC = () => {
     setProvisionError(null);
     setProvisionSuccess(null);
 
-    if (!provisionAdminPassword.trim()) {
+    const activePassword = provisionAdminPasswordRef.current.trim();
+    if (!activePassword) {
       setProvisionError('Please enter the Admin Security Password before authenticating with Google.');
       throw new Error('Admin Security Password is required');
     }
@@ -140,7 +144,7 @@ export const LoginPage: React.FC = () => {
       throw new Error('Google provisioning is not available.');
     }
 
-    await adminProvisionGoogle(provisionAdminPassword.trim(), credential);
+    await adminProvisionGoogle(activePassword, credential);
   };
 
   return (

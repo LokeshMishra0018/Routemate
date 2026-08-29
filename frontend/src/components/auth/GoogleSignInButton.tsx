@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -57,20 +57,29 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
+  const onCustomAuthRef = useRef(onCustomAuth);
+  onCustomAuthRef.current = onCustomAuth;
+
+  const loginWithGoogleRef = useRef(loginWithGoogle);
+  loginWithGoogleRef.current = loginWithGoogle;
+
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+
   const handleCredentialResponse = async (credential: string) => {
     setIsLoading(true);
     try {
-      if (onCustomAuth) {
-        await onCustomAuth(credential);
+      if (onCustomAuthRef.current) {
+        await onCustomAuthRef.current(credential);
       } else {
-        await loginWithGoogle(credential);
+        await loginWithGoogleRef.current(credential);
       }
       navigate(from, { replace: true });
     } catch (err: unknown) {
       if (err instanceof Error) {
-        onError?.(err.message);
+        onErrorRef.current?.(err.message);
       } else {
-        onError?.(
+        onErrorRef.current?.(
           allowAnyDomain
             ? 'Google authentication failed. Please verify your admin security password.'
             : 'Google authentication failed. Please make sure you use an official @kiet.edu account.'
@@ -80,6 +89,9 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
       setIsLoading(false);
     }
   };
+
+  const handleCredentialResponseRef = useRef(handleCredentialResponse);
+  handleCredentialResponseRef.current = handleCredentialResponse;
 
   useEffect(() => {
     if (!googleClientId) return;
@@ -102,7 +114,7 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
       try {
         window.google.accounts.id.initialize({
           client_id: googleClientId,
-          callback: (res) => handleCredentialResponse(res.credential),
+          callback: (res) => handleCredentialResponseRef.current(res.credential),
           ...(allowAnyDomain ? {} : { hosted_domain: 'kiet.edu' }),
         });
 
