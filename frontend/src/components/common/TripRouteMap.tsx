@@ -65,14 +65,25 @@ const TILE_LAYERS: Record<TileTheme, { url: string; attribution: string; name: s
   },
 };
 
+// Luxury Apple Maps / Uber Midnight Navy Palette for Google Maps
 const GOOGLE_DARK_STYLE: any[] = [
-  { elementType: 'geometry', stylers: [{ color: '#1e293b' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#0f172a' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#94a3b8' }] },
+  { elementType: 'geometry', stylers: [{ color: '#0b1120' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#0f172a' }, { weight: 3 }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#cbd5e1' }] },
+  {
+    featureType: 'administrative',
+    elementType: 'geometry',
+    stylers: [{ visibility: 'off' }],
+  },
+  {
+    featureType: 'administrative.country',
+    elementType: 'geometry.stroke',
+    stylers: [{ color: '#334155' }, { weight: 1 }],
+  },
   {
     featureType: 'administrative.locality',
     elementType: 'labels.text.fill',
-    stylers: [{ color: '#cbd5e1' }],
+    stylers: [{ color: '#e2e8f0' }, { weight: 600 }],
   },
   {
     featureType: 'poi',
@@ -82,42 +93,62 @@ const GOOGLE_DARK_STYLE: any[] = [
   {
     featureType: 'poi.park',
     elementType: 'geometry',
-    stylers: [{ color: '#14532d' }],
+    stylers: [{ color: '#064e3b' }, { opacity: 0.6 }],
+  },
+  {
+    featureType: 'poi.park',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#34d399' }],
   },
   {
     featureType: 'road',
     elementType: 'geometry',
-    stylers: [{ color: '#334155' }],
-  },
-  {
-    featureType: 'road',
-    elementType: 'geometry.stroke',
     stylers: [{ color: '#1e293b' }],
   },
   {
     featureType: 'road',
+    elementType: 'geometry.stroke',
+    stylers: [{ color: '#0f172a' }, { weight: 1 }],
+  },
+  {
+    featureType: 'road',
     elementType: 'labels.text.fill',
-    stylers: [{ color: '#f1f5f9' }],
+    stylers: [{ color: '#94a3b8' }],
   },
   {
     featureType: 'road.highway',
     elementType: 'geometry',
-    stylers: [{ color: '#6366f1' }],
+    stylers: [{ color: '#334155' }],
   },
   {
     featureType: 'road.highway',
     elementType: 'geometry.stroke',
-    stylers: [{ color: '#312e81' }],
+    stylers: [{ color: '#1e293b' }, { weight: 1.5 }],
+  },
+  {
+    featureType: 'road.highway',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#f8fafc' }],
+  },
+  {
+    featureType: 'transit',
+    elementType: 'geometry',
+    stylers: [{ color: '#1e293b' }],
+  },
+  {
+    featureType: 'transit.station',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#38bdf8' }],
   },
   {
     featureType: 'water',
     elementType: 'geometry',
-    stylers: [{ color: '#0f172a' }],
+    stylers: [{ color: '#030712' }],
   },
   {
     featureType: 'water',
     elementType: 'labels.text.fill',
-    stylers: [{ color: '#64748b' }],
+    stylers: [{ color: '#475569' }],
   },
 ];
 
@@ -180,7 +211,7 @@ function createCustomIcon(type: MapWaypoint['type'], sequenceNumber?: number): L
   }
 
   const html = `
-    <div class="relative flex items-center justify-center -translate-x-1/2 -translate-y-1/2 group">
+    <div class="relative flex items-center justify-center -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
       <div class="absolute w-8 h-8 rounded-full ${bgColor} opacity-40 ${pulseClass}"></div>
       <div class="relative flex items-center justify-center w-7 h-7 rounded-full ${bgColor} shadow-lg border-2 border-slate-900 z-10 transition-transform duration-200 group-hover:scale-125">
         ${iconSvg}
@@ -200,41 +231,69 @@ function createCustomIcon(type: MapWaypoint['type'], sequenceNumber?: number): L
 }
 
 /**
- * Helper hook to auto-fit map viewport to bounds of all waypoints
+ * Creates custom SVG Pin for Google Maps
  */
-const MapAutoFitController: React.FC<{ waypoints: MapWaypoint[]; routeCoords: [number, number][] }> = ({
-  waypoints,
-  routeCoords,
-}) => {
+function createGoogleMarkerIcon(type: MapWaypoint['type'], sequenceNumber?: number): any {
+  const fillColor = type === 'origin' ? '#10b981' : type === 'destination' ? '#f59e0b' : '#0ea5e9';
+  const labelText = type === 'origin' ? 'A' : type === 'destination' ? 'B' : `${sequenceNumber || 1}`;
+
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="34" height="44" viewBox="0 0 34 44">
+      <defs>
+        <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000000" flood-opacity="0.5"/>
+        </filter>
+      </defs>
+      <path d="M17 0C7.61 0 0 7.61 0 17c0 12.75 17 27 17 27s17-14.25 17-27C34 7.61 26.39 0 17 0z" fill="${fillColor}" stroke="#0f172a" stroke-width="2" filter="url(#shadow)"/>
+      <circle cx="17" cy="16" r="10" fill="#0f172a"/>
+      <text x="17" y="20" font-family="system-ui, sans-serif" font-size="12" font-weight="bold" fill="#ffffff" text-anchor="middle">${labelText}</text>
+    </svg>
+  `;
+
+  const win = window as any;
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: win.google?.maps ? new win.google.maps.Size(34, 44) : undefined,
+    anchor: win.google?.maps ? new win.google.maps.Point(17, 44) : undefined,
+  };
+}
+
+/**
+ * Smart Camera Auto-Fit Hook for Leaflet that ONLY fits bounds ONCE per route change
+ * Prevents camera freeze so users have 100% free drag, pan, and zoom!
+ */
+const SmartMapAutoFitController: React.FC<{
+  waypoints: MapWaypoint[];
+  routeCoords: [number, number][];
+}> = ({ waypoints, routeCoords }) => {
   const map = useMap();
+  const lastFittedSignature = useRef<string>('');
 
   useEffect(() => {
     if (waypoints.length === 0) return;
 
+    // Create a unique coordinate signature for origin + stops + destination
+    const currentSignature = waypoints
+      .filter((w) => typeof w.latitude === 'number' && !isNaN(w.latitude))
+      .map((w) => `${w.latitude.toFixed(4)},${w.longitude.toFixed(4)}`)
+      .join('|');
+
+    if (!currentSignature || currentSignature === lastFittedSignature.current) {
+      return; // Already framed, do NOT override user dragging/zooming!
+    }
+
+    lastFittedSignature.current = currentSignature;
+
     if (routeCoords.length > 1) {
       const bounds = L.latLngBounds(routeCoords);
-      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15, animate: true });
-    } else if (waypoints.length === 1) {
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15, animate: true });
+    } else if (waypoints.length === 1 && waypoints[0].latitude) {
       map.setView([waypoints[0].latitude, waypoints[0].longitude], 13, { animate: true });
-    } else {
+    } else if (waypoints.length > 1) {
       const bounds = L.latLngBounds(waypoints.map((w) => [w.latitude, w.longitude]));
-      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14, animate: true });
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14, animate: true });
     }
   }, [waypoints, routeCoords, map]);
-
-  return null;
-};
-/**
- * Helper hook to fly map to user's GPS position
- */
-const UserLocationFlyToController: React.FC<{ userLocation: [number, number] | null }> = ({ userLocation }) => {
-  const map = useMap();
-
-  useEffect(() => {
-    if (userLocation) {
-      map.flyTo(userLocation, 15, { animate: true });
-    }
-  }, [userLocation, map]);
 
   return null;
 };
@@ -282,53 +341,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
   const googleMarkersRef = useRef<any[]>([]);
   const googlePolylineRef = useRef<any[]>([]);
   const googleUserMarkerRef = useRef<any>(null);
-
-  const handleLocateMe = () => {
-    if (!navigator.geolocation) {
-      alert('Geolocation is not supported by your browser.');
-      return;
-    }
-
-    setIsLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        setUserLocation([lat, lng]);
-        setIsLocating(false);
-
-        if (engine === 'google' && googleMapInstance.current) {
-          const win = window as any;
-          googleMapInstance.current.setCenter({ lat, lng });
-          googleMapInstance.current.setZoom(15);
-
-          if (googleUserMarkerRef.current) {
-            googleUserMarkerRef.current.setMap(null);
-          }
-
-          googleUserMarkerRef.current = new win.google.maps.Marker({
-            position: { lat, lng },
-            map: googleMapInstance.current,
-            title: 'Your Location',
-            icon: {
-              path: win.google.maps.SymbolPath.CIRCLE,
-              scale: 8,
-              fillColor: '#38bdf8',
-              fillOpacity: 1,
-              strokeColor: '#ffffff',
-              strokeWeight: 2,
-            },
-          });
-        }
-      },
-      (err) => {
-        console.warn('Geolocation error:', err);
-        setIsLocating(false);
-        alert('Could not access your location. Please check browser permissions.');
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
-  };
+  const googleLastFittedSignature = useRef<string>('');
 
   // Initialize Google Maps API Loader if Key is Present
   useEffect(() => {
@@ -386,7 +399,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
     };
   }, [waypoints, onRouteCalculated]);
 
-  // Render & Update Google Maps instance
+  // Render & Update Google Maps instance with Single-Shot Auto-Fit
   useEffect(() => {
     const win = window as any;
     if (engine !== 'google' || !isGoogleLoaded || !googleMapRef.current || !win.google?.maps) return;
@@ -408,6 +421,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
         mapTypeControl: false,
         streetViewControl: false,
         fullscreenControl: false,
+        gestureHandling: interactive ? 'greedy' : 'none', // Allows ultra smooth 1-finger drag & mouse-wheel zoom
         styles: tileTheme === 'dark' ? GOOGLE_DARK_STYLE : undefined,
         mapTypeId: tileTheme === 'satellite' ? win.google.maps.MapTypeId.HYBRID : win.google.maps.MapTypeId.ROADMAP,
       });
@@ -416,6 +430,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
       map.setOptions({
         styles: tileTheme === 'dark' ? GOOGLE_DARK_STYLE : undefined,
         mapTypeId: tileTheme === 'satellite' ? win.google.maps.MapTypeId.HYBRID : win.google.maps.MapTypeId.ROADMAP,
+        gestureHandling: interactive ? 'greedy' : 'none',
       });
       win.google.maps.event.trigger(map, 'resize');
     }
@@ -432,31 +447,28 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
 
     const bounds = new win.google.maps.LatLngBounds();
 
-    // Add Google Markers
-    validPoints.forEach((wp, idx) => {
+    // Add Custom Google SVG Markers
+    validPoints.forEach((wp) => {
       const pos = { lat: wp.latitude, lng: wp.longitude };
       bounds.extend(pos);
-
-      const markerColor = wp.type === 'origin' ? '00e676' : wp.type === 'destination' ? 'ffb300' : '00b0ff';
-      const markerLetter = wp.type === 'origin' ? 'A' : wp.type === 'destination' ? 'B' : `${wp.sequenceNumber || idx}`;
 
       const marker = new win.google.maps.Marker({
         position: pos,
         map,
         title: wp.name,
-        label: {
-          text: markerLetter,
-          color: '#ffffff',
-          fontWeight: 'bold',
-        },
-        icon: {
-          url: `https://chart.googleapis.com/chart?chst=d_map_pin_letter&chld=${markerLetter}|${markerColor}|000000`,
-          scaledSize: new win.google.maps.Size(26, 40),
-        },
+        icon: createGoogleMarkerIcon(wp.type, wp.sequenceNumber),
+        animation: win.google.maps.Animation.DROP,
       });
 
       const infoWindow = new win.google.maps.InfoWindow({
-        content: `<div style="color: #0f172a; padding: 4px;"><strong>${wp.name}</strong><br/><span style="font-size: 11px; text-transform: uppercase;">${wp.type}</span></div>`,
+        content: `
+          <div style="color: #0f172a; padding: 4px; font-family: system-ui, sans-serif;">
+            <span style="font-size: 10px; font-weight: bold; text-transform: uppercase; color: ${wp.type === 'origin' ? '#059669' : wp.type === 'destination' ? '#d97706' : '#0284c7'};">
+              ${wp.type === 'stop' ? `Stop #${wp.sequenceNumber}` : wp.type}
+            </span>
+            <div style="font-size: 12px; font-weight: bold; margin-top: 2px;">${wp.name}</div>
+          </div>
+        `,
       });
 
       marker.addListener('click', () => {
@@ -475,7 +487,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
         path,
         geodesic: true,
         strokeColor: '#6366f1',
-        strokeOpacity: 0.4,
+        strokeOpacity: 0.45,
         strokeWeight: 8,
         map,
       });
@@ -486,7 +498,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
         geodesic: true,
         strokeColor: '#38bdf8',
         strokeOpacity: 0.95,
-        strokeWeight: 4,
+        strokeWeight: 4.5,
         map,
       });
 
@@ -495,16 +507,69 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
       path.forEach((pt) => bounds.extend(pt));
     }
 
-    setTimeout(() => {
-      if (validPoints.length > 1 || (routeResult && routeResult.coordinates.length > 1)) {
-        map.fitBounds(bounds);
-      } else if (validPoints.length === 1) {
-        map.setCenter({ lat: validPoints[0].latitude, lng: validPoints[0].longitude });
-        map.setZoom(14);
-      }
-      win.google.maps.event.trigger(map, 'resize');
-    }, 60);
+    // Smart Camera Framing: Only fit bounds ONCE per route change
+    const signature = validPoints.map((p) => `${p.latitude.toFixed(4)},${p.longitude.toFixed(4)}`).join('|');
+    if (signature && signature !== googleLastFittedSignature.current) {
+      googleLastFittedSignature.current = signature;
+
+      setTimeout(() => {
+        if (validPoints.length > 1 || (routeResult && routeResult.coordinates.length > 1)) {
+          map.fitBounds(bounds, { top: 50, bottom: 50, left: 50, right: 50 });
+        } else if (validPoints.length === 1) {
+          map.setCenter({ lat: validPoints[0].latitude, lng: validPoints[0].longitude });
+          map.setZoom(14);
+        }
+        win.google.maps.event.trigger(map, 'resize');
+      }, 80);
+    }
   }, [engine, isGoogleLoaded, waypoints, routeResult, tileTheme, interactive]);
+
+  const handleLocateMe = () => {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by your browser.');
+      return;
+    }
+
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setUserLocation([lat, lng]);
+        setIsLocating(false);
+
+        if (engine === 'google' && googleMapInstance.current) {
+          const win = window as any;
+          googleMapInstance.current.setCenter({ lat, lng });
+          googleMapInstance.current.setZoom(15);
+
+          if (googleUserMarkerRef.current) {
+            googleUserMarkerRef.current.setMap(null);
+          }
+
+          googleUserMarkerRef.current = new win.google.maps.Marker({
+            position: { lat, lng },
+            map: googleMapInstance.current,
+            title: 'Your Location',
+            icon: {
+              path: win.google.maps.SymbolPath.CIRCLE,
+              scale: 8,
+              fillColor: '#38bdf8',
+              fillOpacity: 1,
+              strokeColor: '#ffffff',
+              strokeWeight: 2.5,
+            },
+          });
+        }
+      },
+      (err) => {
+        console.warn('Geolocation error:', err);
+        setIsLocating(false);
+        alert('Could not access your location. Please check browser permissions.');
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
   const defaultCenter: [number, number] = useMemo(() => {
     if (waypoints.length > 0 && waypoints[0].latitude) {
@@ -521,14 +586,14 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
         isFullscreen ? 'fixed inset-4 z-50 rounded-2xl' : className || 'h-96 w-full'
       }`}
     >
-      {/* Floating Map Controls Toolbar */}
-      <div className="absolute top-3 right-3 z-[1000] flex items-center gap-2">
+      {/* Floating Map Controls Toolbar (pointer-events-none on wrapper so map clicks pass through) */}
+      <div className="absolute top-3 right-3 z-[1000] flex items-center gap-2 pointer-events-none">
         {/* Engine Switcher (Google Maps vs OpenStreetMap) */}
         {googleApiKey && (
           <button
             type="button"
             onClick={() => setEngine(engine === 'google' ? 'leaflet' : 'google')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs font-semibold shadow-lg backdrop-blur-md transition-all ${
+            className={`pointer-events-auto flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold shadow-xl backdrop-blur-md transition-all active:scale-95 ${
               engine === 'google'
                 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
                 : 'bg-slate-900/90 text-slate-300 border-slate-700/60 hover:bg-slate-800'
@@ -545,7 +610,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
           type="button"
           onClick={handleLocateMe}
           disabled={isLocating}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs font-semibold shadow-lg backdrop-blur-md transition-all ${
+          className={`pointer-events-auto flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold shadow-xl backdrop-blur-md transition-all active:scale-95 ${
             userLocation
               ? 'bg-sky-500/20 text-sky-300 border-sky-500/40 hover:bg-sky-500/30'
               : 'bg-slate-900/90 text-slate-300 border-slate-700/60 hover:bg-slate-800'
@@ -561,11 +626,11 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
         </button>
 
         {/* Tile Theme Switcher */}
-        <div className="flex items-center p-1 rounded-xl bg-slate-900/90 border border-slate-700/60 shadow-lg backdrop-blur-md text-xs">
+        <div className="pointer-events-auto flex items-center p-1 rounded-xl bg-slate-900/90 border border-slate-700/60 shadow-xl backdrop-blur-md text-xs">
           <button
             type="button"
             onClick={() => setTileTheme('dark')}
-            className={`px-2 py-1 rounded-lg transition-all ${
+            className={`px-2.5 py-1 rounded-lg transition-all ${
               tileTheme === 'dark' ? 'bg-indigo-600 text-white font-medium shadow' : 'text-slate-400 hover:text-slate-200'
             }`}
             title="Dark Theme"
@@ -575,7 +640,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
           <button
             type="button"
             onClick={() => setTileTheme('light')}
-            className={`px-2 py-1 rounded-lg transition-all ${
+            className={`px-2.5 py-1 rounded-lg transition-all ${
               tileTheme === 'light' ? 'bg-indigo-600 text-white font-medium shadow' : 'text-slate-400 hover:text-slate-200'
             }`}
             title="Clean Daylight Theme"
@@ -585,7 +650,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
           <button
             type="button"
             onClick={() => setTileTheme('satellite')}
-            className={`px-2 py-1 rounded-lg transition-all ${
+            className={`px-2.5 py-1 rounded-lg transition-all ${
               tileTheme === 'satellite' ? 'bg-indigo-600 text-white font-medium shadow' : 'text-slate-400 hover:text-slate-200'
             }`}
             title="Satellite Imagery"
@@ -598,7 +663,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
         <button
           type="button"
           onClick={() => setIsFullscreen(!isFullscreen)}
-          className="p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/60 shadow-lg backdrop-blur-md transition-all"
+          className="pointer-events-auto p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/60 shadow-xl backdrop-blur-md transition-all active:scale-95"
           title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen Map'}
         >
           {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
@@ -607,7 +672,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
 
       {/* Floating Route Statistics HUD */}
       {showStatsHud && routeResult && routeResult.distanceKm > 0 && (
-        <div className="absolute bottom-3 left-3 right-3 sm:right-auto z-[1000] p-3 rounded-xl bg-slate-900/90 border border-slate-700/60 shadow-2xl backdrop-blur-md flex flex-wrap items-center gap-4 text-xs text-slate-200 animate-in fade-in slide-in-from-bottom-2 duration-200">
+        <div className="pointer-events-none absolute bottom-3 left-3 right-3 sm:right-auto z-[1000] p-3 rounded-xl bg-slate-900/95 border border-slate-700/70 shadow-2xl backdrop-blur-md flex flex-wrap items-center gap-4 text-xs text-slate-200 animate-in fade-in slide-in-from-bottom-2 duration-200">
           <div className="flex items-center gap-1.5 font-medium text-emerald-400">
             <Navigation className="h-4 w-4 shrink-0" />
             <span className="text-sm font-semibold text-slate-100">{routeResult.distanceKm} km</span>
@@ -654,9 +719,16 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
           zoom={12}
           scrollWheelZoom={interactive}
           dragging={interactive}
+          touchZoom={interactive}
           doubleClickZoom={interactive}
           zoomControl={interactive}
-          className={`w-full h-full min-h-[240px] ${tileTheme === 'dark' ? 'leaflet-dark-tiles' : ''}`}
+          className={`w-full h-full min-h-[240px] ${
+            tileTheme === 'dark'
+              ? 'leaflet-dark-tiles'
+              : tileTheme === 'light'
+              ? 'leaflet-light-tiles'
+              : ''
+          }`}
         >
           <TileLayer
             key={`${tileTheme}-${activeTile.url}`}
@@ -668,12 +740,10 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
 
           <LeafletResizeHandler isVisible={engine === 'leaflet' || !googleApiKey} />
 
-          <MapAutoFitController
+          <SmartMapAutoFitController
             waypoints={waypoints}
             routeCoords={routeResult?.coordinates || []}
           />
-
-          <UserLocationFlyToController userLocation={userLocation} />
 
           {/* User Live Location Beacon */}
           {userLocation && (
@@ -683,12 +753,12 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
                 className: 'user-gps-beacon',
                 html: `
                   <div class="relative flex items-center justify-center -translate-x-1/2 -translate-y-1/2">
-                    <div class="absolute w-8 h-8 rounded-full bg-sky-500 opacity-50 animate-ping"></div>
-                    <div class="relative w-4 h-4 rounded-full bg-sky-400 border-2 border-white shadow-md"></div>
+                    <div class="absolute w-8 h-8 rounded-full bg-sky-400 gps-pulse-ring"></div>
+                    <div class="relative w-4 h-4 rounded-full bg-sky-400 border-2 border-white shadow-lg"></div>
                   </div>
                 `,
-                iconSize: [20, 20],
-                iconAnchor: [10, 10],
+                iconSize: [24, 24],
+                iconAnchor: [12, 12],
               })}
             >
               <Popup>
@@ -706,7 +776,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
                 pathOptions={{
                   color: '#6366f1',
                   weight: 8,
-                  opacity: 0.35,
+                  opacity: 0.4,
                   lineCap: 'round',
                   lineJoin: 'round',
                 }}
@@ -716,7 +786,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
                 positions={routeResult.coordinates}
                 pathOptions={{
                   color: '#38bdf8',
-                  weight: 4,
+                  weight: 4.5,
                   opacity: 0.95,
                   lineCap: 'round',
                   lineJoin: 'round',
