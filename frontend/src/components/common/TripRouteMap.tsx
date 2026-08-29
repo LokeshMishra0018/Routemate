@@ -41,21 +41,27 @@ export interface TripRouteMapProps {
 type TileTheme = 'dark' | 'light' | 'satellite';
 type MapEngine = 'google' | 'leaflet';
 
-const TILE_LAYERS: Record<TileTheme, { url: string; attribution: string; name: string }> = {
+const TILE_LAYERS: Record<TileTheme, { url: string; attribution: string; name: string; maxZoom?: number; maxNativeZoom?: number }> = {
   dark: {
     name: 'Midnight Dark',
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
-    attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
+    maxNativeZoom: 19,
   },
   light: {
     name: 'Clean Daylight',
     url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
+    maxNativeZoom: 19,
   },
   satellite: {
     name: 'Satellite View',
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS',
+    maxZoom: 19,
+    maxNativeZoom: 18,
   },
 };
 
@@ -229,6 +235,26 @@ const UserLocationFlyToController: React.FC<{ userLocation: [number, number] | n
       map.flyTo(userLocation, 15, { animate: true });
     }
   }, [userLocation, map]);
+
+  return null;
+};
+
+/**
+ * Helper hook to force Leaflet viewport recalculation on visibility change
+ */
+const LeafletResizeHandler: React.FC<{ isVisible: boolean }> = ({ isVisible }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (isVisible) {
+      const t1 = setTimeout(() => map.invalidateSize(), 50);
+      const t2 = setTimeout(() => map.invalidateSize(), 250);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+      };
+    }
+  }, [isVisible, map]);
 
   return null;
 };
@@ -630,9 +656,17 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
           dragging={interactive}
           doubleClickZoom={interactive}
           zoomControl={interactive}
-          className="w-full h-full min-h-[240px]"
+          className={`w-full h-full min-h-[240px] ${tileTheme === 'dark' ? 'leaflet-dark-tiles' : ''}`}
         >
-          <TileLayer url={activeTile.url} attribution={activeTile.attribution} maxZoom={19} />
+          <TileLayer
+            key={`${tileTheme}-${activeTile.url}`}
+            url={activeTile.url}
+            attribution={activeTile.attribution}
+            maxZoom={activeTile.maxZoom || 19}
+            maxNativeZoom={activeTile.maxNativeZoom || 19}
+          />
+
+          <LeafletResizeHandler isVisible={engine === 'leaflet' || !googleApiKey} />
 
           <MapAutoFitController
             waypoints={waypoints}

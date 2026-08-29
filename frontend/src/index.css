@@ -163,3 +163,8 @@
   animation: marker-pulse-blue 2s infinite;
 }
 
+/* Midnight Dark Filter for OpenStreetMap Tiles with 100% Full Zoom Coverage */
+.leaflet-dark-tiles .leaflet-tile {
+  filter: brightness(0.6) invert(1) contrast(2.6) hue-rotate(205deg) saturate(0.4) brightness(0.75);
+}
+
