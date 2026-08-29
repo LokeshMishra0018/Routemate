@@ -45,7 +45,9 @@ export const AdminSecurityPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   // Show / Hide Password
-  const [showPassword, setShowPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(true); // Default to visible so admin immediately sees it
+  const [showNewPassword, setShowNewPassword] = useState(true);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(true);
   const [copied, setCopied] = useState(false);
 
   // Update Password Form
@@ -254,21 +256,43 @@ export const AdminSecurityPage: React.FC = () => {
           <form onSubmit={handleUpdatePassword} className="space-y-4">
             <Input
               label="New Security Password"
-              type="password"
+              type={showNewPassword ? 'text' : 'password'}
               placeholder="Enter new security password (min 6 characters)"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               leftIcon={<KeyRound className="w-4 h-4 text-indigo-400" />}
+              rightIcon={
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="text-slate-400 hover:text-slate-200 transition-colors p-1 cursor-pointer"
+                  title={showNewPassword ? 'Hide password' : 'Show password'}
+                  tabIndex={-1}
+                >
+                  {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              }
               required
             />
 
             <Input
               label="Confirm New Security Password"
-              type="password"
+              type={showConfirmPassword ? 'text' : 'password'}
               placeholder="Confirm new security password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               leftIcon={<Lock className="w-4 h-4 text-emerald-400" />}
+              rightIcon={
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="text-slate-400 hover:text-slate-200 transition-colors p-1 cursor-pointer"
+                  title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  tabIndex={-1}
+                >
+                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              }
               required
             />
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Compass, Mail, Lock, AlertCircle, ArrowRight, Crown, CheckCircle2, X, KeyRound, User as UserIcon } from 'lucide-react';
+import { Compass, Mail, Lock, AlertCircle, ArrowRight, Crown, CheckCircle2, X, KeyRound, User as UserIcon, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -21,9 +21,11 @@ export const LoginPage: React.FC = () => {
   // Admin Provisioning State
   const [showProvisionModal, setShowProvisionModal] = useState(false);
   const [provisionAdminPassword, setProvisionAdminPassword] = useState('');
+  const [showAdminPassword, setShowAdminPassword] = useState(true);
   const [provisionName, setProvisionName] = useState('');
   const [provisionEmail, setProvisionEmail] = useState('');
   const [provisionUserPassword, setProvisionUserPassword] = useState('');
+  const [showUserPassword, setShowUserPassword] = useState(true);
   const [provisionError, setProvisionError] = useState<string | null>(null);
   const [provisionSuccess, setProvisionSuccess] = useState<string | null>(null);
   const [isProvisioning, setIsProvisioning] = useState(false);
@@ -231,11 +233,22 @@ export const LoginPage: React.FC = () => {
             <form onSubmit={handleAdminProvision} className="space-y-3.5">
               <Input
                 label="Admin Security Password"
-                type="password"
+                type={showAdminPassword ? 'text' : 'password'}
                 placeholder="Enter secret admin security password"
                 value={provisionAdminPassword}
                 onChange={(e) => setProvisionAdminPassword(e.target.value)}
                 leftIcon={<KeyRound className="w-4 h-4 text-amber-400" />}
+                rightIcon={
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminPassword(!showAdminPassword)}
+                    className="text-slate-400 hover:text-slate-200 transition-colors p-1 cursor-pointer"
+                    title={showAdminPassword ? 'Hide password' : 'Show password'}
+                    tabIndex={-1}
+                  >
+                    {showAdminPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                }
                 required
               />
 
@@ -261,11 +274,22 @@ export const LoginPage: React.FC = () => {
 
               <Input
                 label="Password (min 8 characters)"
-                type="password"
+                type={showUserPassword ? 'text' : 'password'}
                 placeholder="••••••••"
                 value={provisionUserPassword}
                 onChange={(e) => setProvisionUserPassword(e.target.value)}
                 leftIcon={<Lock className="w-4 h-4" />}
+                rightIcon={
+                  <button
+                    type="button"
+                    onClick={() => setShowUserPassword(!showUserPassword)}
+                    className="text-slate-400 hover:text-slate-200 transition-colors p-1 cursor-pointer"
+                    title={showUserPassword ? 'Hide password' : 'Show password'}
+                    tabIndex={-1}
+                  >
+                    {showUserPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                }
                 required
               />
 
