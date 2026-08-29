@@ -55,6 +55,7 @@ const rawEnvSchema = z
       .transform((val) => (val ? parseInt(val, 10) : 587)),
     SMTP_USER: z.string().optional(),
     SMTP_PASS: z.string().optional(),
+    SMTP_FROM: z.string().optional(),
     SMTP_SECURE: z
       .string()
       .optional()

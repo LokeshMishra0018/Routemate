@@ -1355,11 +1355,12 @@ export class AdminService {
 
     // Audit log
     await adminRepository.logAction({
-      adminId: adminUserId,
-      action: 'update_security_password',
-      targetType: 'system_settings',
-      targetId: 'admin_provision_password',
-      reason: 'Admin updated the dynamic account provisioning security password',
+      actorUserId: adminUserId,
+      actionType: 'security_password_updated',
+      targetUserId: null,
+      targetResourceId: 'admin_provision_password',
+      metadata: { reason: 'Admin updated the dynamic account provisioning security password' },
+      createdAt: now,
     });
 
     return {

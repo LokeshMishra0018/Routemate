@@ -15,7 +15,8 @@ export interface AdminActionDocument {
     | 'trip_purged_by_admin'
     | 'trip_visibility_toggled'
     | 'trip_changes_requested'
-    | 'trip_force_completed';
+    | 'trip_force_completed'
+    | 'security_password_updated';
   targetUserId: string | null;
   targetResourceId: string | null;
   metadata?: Record<string, unknown>;

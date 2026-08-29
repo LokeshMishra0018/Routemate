@@ -700,7 +700,7 @@ export class AuthService {
     const passwordHash = await hashPassword(input.password);
     const now = new Date();
 
-    const userId = await usersRepository.createUser({
+    const createdUser = await usersRepository.createUser({
       email: input.email.trim(),
       emailNormalized,
       passwordHash,
@@ -711,14 +711,21 @@ export class AuthService {
       emailVerificationExpiresAt: null,
       passwordResetTokenHash: null,
       passwordResetExpiresAt: null,
+      lastLoginAt: null,
       createdAt: now,
       updatedAt: now,
     });
+
+    const userId = createdUser._id.toHexString();
 
     await usersRepository.createProfile({
       userId,
       fullName: input.fullName.trim(),
       collegeId: college.id,
+      academicYear: null,
+      gender: null,
+      bio: null,
+      avatarUrl: null,
       verificationStatus: 'unverified', // 🟡 Yellow Tick (ID Pending)
       trustScore: 50,
       averageRating: 5.0,
