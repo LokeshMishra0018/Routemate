@@ -59,7 +59,7 @@ const rawEnvSchema = z
       .string()
       .optional()
       .transform((val) => val === 'true' || val === '1'),
-    ADMIN_PROVISION_PASSCODE: z.string().default('routemate2026'),
+    ADMIN_PROVISION_PASSWORD: z.string().default('routemate2026'),
   })
   .superRefine((data, ctx) => {
     const isProd = data.NODE_ENV === 'production';
@@ -150,7 +150,7 @@ const rawEnvSchema = z
       SMTP_PASS: data.SMTP_PASS,
       SMTP_FROM: data.SMTP_FROM || data.EMAIL_FROM,
       SMTP_SECURE: data.SMTP_SECURE,
-      ADMIN_PROVISION_PASSCODE: data.ADMIN_PROVISION_PASSCODE || 'routemate2026',
+      ADMIN_PROVISION_PASSWORD: data.ADMIN_PROVISION_PASSWORD || 'routemate2026',
     };
   });
 

@@ -450,4 +450,47 @@ export const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance): Pro
       return reply.status(200).send(createPaginatedResponse(result.items, result.pagination));
     }
   );
+
+  // ==========================================
+  // SECURITY & ACCESS CONTROLS
+  // ==========================================
+
+  // GET /api/v1/admin/security/password - Get current active admin security password
+  app.get(
+    '/security/password',
+    {
+      preHandler: [authenticate, requireRole('moderator', 'admin')],
+    },
+    async (_request, reply) => {
+      const result = await adminService.getAdminSecurityPassword();
+      return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
+
+  // PUT /api/v1/admin/security/password - Update active admin security password
+  app.put(
+    '/security/password',
+    {
+      preHandler: [authenticate, requireRole('moderator', 'admin')],
+    },
+    async (request, reply) => {
+      const body = request.body as { newPassword: string };
+      const result = await adminService.updateAdminSecurityPassword(body.newPassword, request.user!.id);
+      return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
+
+  // GET /api/v1/admin/security/accounts - List recently provisioned / registered accounts
+  app.get(
+    '/security/accounts',
+    {
+      preHandler: [authenticate, requireRole('moderator', 'admin')],
+    },
+    async (request, reply) => {
+      const query = request.query as { limit?: string };
+      const limit = query.limit ? parseInt(query.limit, 10) : 10;
+      const result = await adminService.getProvisionedAccounts(limit);
+      return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
 };

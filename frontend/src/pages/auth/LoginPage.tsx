@@ -20,10 +20,10 @@ export const LoginPage: React.FC = () => {
 
   // Admin Provisioning State
   const [showProvisionModal, setShowProvisionModal] = useState(false);
-  const [provisionPasscode, setProvisionPasscode] = useState('');
+  const [provisionAdminPassword, setProvisionAdminPassword] = useState('');
   const [provisionName, setProvisionName] = useState('');
   const [provisionEmail, setProvisionEmail] = useState('');
-  const [provisionPassword, setProvisionPassword] = useState('');
+  const [provisionUserPassword, setProvisionUserPassword] = useState('');
   const [provisionError, setProvisionError] = useState<string | null>(null);
   const [provisionSuccess, setProvisionSuccess] = useState<string | null>(null);
   const [isProvisioning, setIsProvisioning] = useState(false);
@@ -58,15 +58,15 @@ export const LoginPage: React.FC = () => {
         throw new Error('Admin provisioning is not currently available.');
       }
       const res = await adminProvision({
-        adminPasscode: provisionPasscode,
+        adminPassword: provisionAdminPassword,
         fullName: provisionName,
         email: provisionEmail,
-        password: provisionPassword,
+        password: provisionUserPassword,
       });
 
       setProvisionSuccess(res.message || 'Account provisioned successfully in verification pending phase (🟡 Yellow Tick)!');
       setEmail(provisionEmail);
-      setPassword(provisionPassword);
+      setPassword(provisionUserPassword);
       setTimeout(() => {
         setShowProvisionModal(false);
         setProvisionSuccess(null);
@@ -75,7 +75,7 @@ export const LoginPage: React.FC = () => {
       if (err instanceof Error) {
         setProvisionError(err.message);
       } else {
-        setProvisionError('Failed to provision account. Please verify the admin passcode.');
+        setProvisionError('Failed to provision account. Please verify the admin security password.');
       }
     } finally {
       setIsProvisioning(false);
@@ -230,11 +230,11 @@ export const LoginPage: React.FC = () => {
 
             <form onSubmit={handleAdminProvision} className="space-y-3.5">
               <Input
-                label="Admin Security Passcode"
+                label="Admin Security Password"
                 type="password"
-                placeholder="Enter secret passcode"
-                value={provisionPasscode}
-                onChange={(e) => setProvisionPasscode(e.target.value)}
+                placeholder="Enter secret admin security password"
+                value={provisionAdminPassword}
+                onChange={(e) => setProvisionAdminPassword(e.target.value)}
                 leftIcon={<KeyRound className="w-4 h-4 text-amber-400" />}
                 required
               />
@@ -263,8 +263,8 @@ export const LoginPage: React.FC = () => {
                 label="Password (min 8 characters)"
                 type="password"
                 placeholder="••••••••"
-                value={provisionPassword}
-                onChange={(e) => setProvisionPassword(e.target.value)}
+                value={provisionUserPassword}
+                onChange={(e) => setProvisionUserPassword(e.target.value)}
                 leftIcon={<Lock className="w-4 h-4" />}
                 required
               />

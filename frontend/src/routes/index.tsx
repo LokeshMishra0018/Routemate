@@ -44,6 +44,7 @@ import { AdminVerificationsPage } from '../pages/admin/AdminVerificationsPage';
 import { AdminReportsPage } from '../pages/admin/AdminReportsPage';
 import { AdminSosPage } from '../pages/admin/AdminSosPage';
 import { AdminUsersPage } from '../pages/admin/AdminUsersPage';
+import { AdminSecurityPage } from '../pages/admin/AdminSecurityPage';
 // Overview & Landing Page
 import { LandingPage } from '../pages/LandingPage';
 
@@ -125,6 +126,7 @@ export const router = createBrowserRouter([
       { path: 'reports', element: <AdminReportsPage /> },
       { path: 'sos', element: <AdminSosPage /> },
       { path: 'users', element: <AdminUsersPage /> },
+      { path: 'security', element: <AdminSecurityPage /> },
     ],
   },
 

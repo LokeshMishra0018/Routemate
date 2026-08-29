@@ -26,6 +26,7 @@ export const COLLECTIONS = {
   SOS_EVENTS: 'sosEvents',
   ACTIVITY_LOGS: 'activityLogs',
   SEARCH_LOGS: 'searchLogs',
+  SYSTEM_SETTINGS: 'systemSettings',
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];

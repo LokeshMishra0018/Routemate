@@ -1301,6 +1301,105 @@ export class AdminService {
       },
     };
   }
+
+  /**
+   * Get the current active dynamic Admin Security Password
+   */
+  async getAdminSecurityPassword() {
+    const db = getDb();
+    const doc = await db.collection(COLLECTIONS.SYSTEM_SETTINGS).findOne({ key: 'admin_provision_password' });
+    const fallback = process.env.ADMIN_PROVISION_PASSWORD || 'routemate2026';
+
+    let updatedByName = 'System Default';
+    if (doc?.updatedBy) {
+      try {
+        const userProfile = await usersRepository.findProfileByUserId(doc.updatedBy);
+        if (userProfile?.fullName) updatedByName = userProfile.fullName;
+      } catch {
+        // ignore
+      }
+    }
+
+    return {
+      activePassword: doc?.value || fallback,
+      updatedAt: doc?.updatedAt || new Date('2026-08-01T00:00:00Z'),
+      updatedBy: updatedByName,
+      isDefault: !doc?.value,
+    };
+  }
+
+  /**
+   * Update the active dynamic Admin Security Password
+   */
+  async updateAdminSecurityPassword(newPassword: string, adminUserId: string) {
+    if (!newPassword || newPassword.trim().length < 6) {
+      throw new ValidationError('Admin security password must be at least 6 characters long.');
+    }
+
+    const trimmed = newPassword.trim();
+    const db = getDb();
+    const now = new Date();
+
+    await db.collection(COLLECTIONS.SYSTEM_SETTINGS).updateOne(
+      { key: 'admin_provision_password' },
+      {
+        $set: {
+          key: 'admin_provision_password',
+          value: trimmed,
+          updatedAt: now,
+          updatedBy: adminUserId,
+        },
+      },
+      { upsert: true }
+    );
+
+    // Audit log
+    await adminRepository.logAction({
+      adminId: adminUserId,
+      action: 'update_security_password',
+      targetType: 'system_settings',
+      targetId: 'admin_provision_password',
+      reason: 'Admin updated the dynamic account provisioning security password',
+    });
+
+    return {
+      success: true,
+      activePassword: trimmed,
+      message: 'Admin security password updated successfully in real-time.',
+      updatedAt: now,
+    };
+  }
+
+  /**
+   * Get list of recently provisioned / registered accounts
+   */
+  async getProvisionedAccounts(limit = 10) {
+    const db = getDb();
+    const users = await db
+      .collection(COLLECTIONS.USERS)
+      .find({})
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .toArray();
+
+    const items = await Promise.all(
+      users.map(async (u) => {
+        const profile = await usersRepository.findProfileByUserId(u._id.toHexString());
+        return {
+          id: u._id.toHexString(),
+          email: u.email,
+          role: u.role,
+          status: u.status,
+          fullName: profile?.fullName || u.email.split('@')[0],
+          verificationStatus: profile?.verificationStatus || 'unverified',
+          trustScore: profile?.trustScore || 50,
+          createdAt: u.createdAt,
+        };
+      })
+    );
+
+    return items;
+  }
 }
 
 export const adminService = new AdminService();

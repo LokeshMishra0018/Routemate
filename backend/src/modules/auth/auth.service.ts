@@ -663,15 +663,22 @@ export class AuthService {
 
   /**
    * Controlled admin provisioning of a student account with any email.
-   * Requires matching ADMIN_PROVISION_PASSCODE.
+   * Requires matching dynamic ADMIN_PROVISION_PASSWORD.
    * Provisions account with email confirmed, but verificationStatus in 'unverified' (🟡 Student ID Pending).
    */
   async adminProvision(input: import('./auth.schemas.js').AdminProvisionDto) {
     const env = getEnv();
-    const correctPasscode = env.ADMIN_PROVISION_PASSCODE || 'routemate2026';
+    const fallbackPassword = env.ADMIN_PROVISION_PASSWORD || 'routemate2026';
 
-    if (input.adminPasscode !== correctPasscode) {
-      throw new UnauthorizedError('Invalid admin provision passcode. Access denied.');
+    // 1. Check MongoDB for dynamic security password if configured by admin
+    const db = (await import('../../db/mongo.js')).getDb();
+    const settingDoc = await db.collection((await import('../../db/collections.js')).COLLECTIONS.SYSTEM_SETTINGS).findOne({
+      key: 'admin_provision_password',
+    });
+    const correctPassword = settingDoc?.value || fallbackPassword;
+
+    if (input.adminPassword !== correctPassword) {
+      throw new UnauthorizedError('Invalid admin security password. Access denied.');
     }
 
     const emailNormalized = input.email.toLowerCase().trim();

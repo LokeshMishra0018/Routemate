@@ -15,6 +15,7 @@ import {
   Zap,
   MessageSquare,
   Cpu,
+  KeyRound,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { LoadingSpinner } from '../components/ui/EmptyState';
@@ -47,6 +48,7 @@ export const AdminLayout: React.FC = () => {
         { label: 'Safety Reports', path: '/admin/reports', icon: <AlertOctagon className="w-4 h-4 text-orange-400" /> },
         { label: 'Active SOS Monitor', path: '/admin/sos', icon: <ShieldAlert className="w-4 h-4 text-rose-400" /> },
         { label: 'User Directory', path: '/admin/users', icon: <Users className="w-4 h-4 text-emerald-300" /> },
+        { label: 'Security Password', path: '/admin/security', icon: <KeyRound className="w-4 h-4 text-amber-400" /> },
         { label: 'System Telemetry', path: '/admin/system', icon: <Cpu className="w-4 h-4 text-slate-300" /> },
       ],
     },
