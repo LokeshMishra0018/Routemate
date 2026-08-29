@@ -22,11 +22,11 @@ export const LoginPage: React.FC = () => {
   const [showProvisionModal, setShowProvisionModal] = useState(false);
   const [provisionTab, setProvisionTab] = useState<'email_otp' | 'google'>('email_otp');
   const [provisionAdminPassword, setProvisionAdminPassword] = useState('');
-  const [showAdminPassword, setShowAdminPassword] = useState(true);
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [provisionName, setProvisionName] = useState('');
   const [provisionEmail, setProvisionEmail] = useState('');
   const [provisionUserPassword, setProvisionUserPassword] = useState('');
-  const [showUserPassword, setShowUserPassword] = useState(true);
+  const [showUserPassword, setShowUserPassword] = useState(false);
   const [provisionOtp, setProvisionOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(0);

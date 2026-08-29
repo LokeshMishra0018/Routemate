@@ -45,9 +45,9 @@ export const AdminSecurityPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   // Show / Hide Password
-  const [showPassword, setShowPassword] = useState(true); // Default to visible so admin immediately sees it
-  const [showNewPassword, setShowNewPassword] = useState(true);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [copied, setCopied] = useState(false);
 
   // Update Password Form
