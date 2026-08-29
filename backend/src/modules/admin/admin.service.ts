@@ -723,45 +723,140 @@ export class AdminService {
     const googleCount = googleUsersList.length;
     const emailPasswordCount = Math.max(0, totalUsers - googleCount);
 
-    // Real Peak Online Telemetry from Presence Store
-    const peakMetrics = presenceStore.getPeakStats();
+    // Real Peak Online & Trailing 24-Hour Active Commuter Activity
     const currentLive = liveUsersOnline;
-    const todayPeak = Math.max(currentLive, peakMetrics.todayPeak);
-    const todayPeakTime = peakMetrics.todayPeakTime;
-    const allTimePeak = Math.max(todayPeak, peakMetrics.allTimePeak);
-    const allTimePeakDate = peakMetrics.allTimePeakDate;
 
-    // Real 24-hour hourly trend curve from real presence telemetry
-    const hours24Curve = Array.from({ length: 24 }, (_, h) => {
-      const val = h === now.getHours() ? currentLive : peakMetrics.hourlyMax[h] || 0;
-      return {
-        label: `${h.toString().padStart(2, '0')}:00`,
-        hour: h,
-        value: val,
-      };
-    });
+    // Build trailing 24-hour windows (Index 0 = 23h ago, ..., Index 23 = NOW)
+    const trailing24hPromise = Promise.all(
+      Array.from({ length: 24 }, async (_, i) => {
+        const hoursAgo = 23 - i;
+        const windowStart = new Date(now.getTime() - (hoursAgo + 1) * 60 * 60 * 1000);
+        const windowEnd = new Date(now.getTime() - hoursAgo * 60 * 60 * 1000);
 
-    // Real 7-day trend curve
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const days7Curve = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(now.getTime() - (6 - i) * 24 * 60 * 60 * 1000);
-      const isToday = d.toDateString() === now.toDateString();
-      return {
-        label: dayNames[d.getDay()],
-        fullDate: `${d.getDate()} ${d.toLocaleString('default', { month: 'short' })}`,
-        value: isToday ? todayPeak : 0,
-      };
-    });
+        const [distinctSessionUsers, distinctLoginUsers] = await Promise.all([
+          db.collection(COLLECTIONS.SESSIONS).distinct('userId', {
+            $or: [
+              { lastUsedAt: { $gte: windowStart, $lte: windowEnd } },
+              { createdAt: { $gte: windowStart, $lte: windowEnd } },
+            ],
+          }),
+          db.collection(COLLECTIONS.USERS).distinct('_id', {
+            lastLoginAt: { $gte: windowStart, $lte: windowEnd },
+          }),
+        ]);
 
-    // Real 30-day trend curve
-    const days30Curve = Array.from({ length: 30 }, (_, i) => {
-      const d = new Date(now.getTime() - (29 - i) * 24 * 60 * 60 * 1000);
-      const isToday = d.toDateString() === now.toDateString();
-      return {
-        label: `${d.getDate()} ${d.toLocaleString('default', { month: 'short' })}`,
-        value: isToday ? todayPeak : 0,
-      };
-    });
+        const uniqueUserIds = new Set([
+          ...distinctSessionUsers.map(String),
+          ...distinctLoginUsers.map(String),
+        ]);
+
+        // If it's the current hour (last point), include all current live socket users
+        if (i === 23) {
+          livePresences.forEach((p) => uniqueUserIds.add(p.userId));
+        }
+
+        const pointTime = new Date(now.getTime() - hoursAgo * 60 * 60 * 1000);
+        const timeLabel =
+          i === 23
+            ? 'Now'
+            : pointTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+
+        return {
+          label: timeLabel,
+          hour: pointTime.getHours(),
+          value: Math.max(i === 23 ? currentLive : 0, uniqueUserIds.size),
+        };
+      })
+    );
+
+    // Build trailing 7-day windows (Index 0 = 6 days ago, ..., Index 6 = Today/Now)
+    const trailing7dPromise = Promise.all(
+      Array.from({ length: 7 }, async (_, i) => {
+        const daysAgo = 6 - i;
+        const dStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysAgo, 0, 0, 0);
+        const dEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysAgo, 23, 59, 59, 999);
+
+        const [distinctSessionUsers, distinctLoginUsers] = await Promise.all([
+          db.collection(COLLECTIONS.SESSIONS).distinct('userId', {
+            $or: [
+              { lastUsedAt: { $gte: dStart, $lte: dEnd } },
+              { createdAt: { $gte: dStart, $lte: dEnd } },
+            ],
+          }),
+          db.collection(COLLECTIONS.USERS).distinct('_id', {
+            lastLoginAt: { $gte: dStart, $lte: dEnd },
+          }),
+        ]);
+
+        const uniqueUserIds = new Set([
+          ...distinctSessionUsers.map(String),
+          ...distinctLoginUsers.map(String),
+        ]);
+
+        if (i === 6) {
+          livePresences.forEach((p) => uniqueUserIds.add(p.userId));
+        }
+
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        return {
+          label: i === 6 ? 'Today' : dayNames[dStart.getDay()],
+          fullDate: `${dStart.getDate()} ${dStart.toLocaleString('default', { month: 'short' })}`,
+          value: Math.max(i === 6 ? Math.max(activeUsersToday, currentLive) : 0, uniqueUserIds.size),
+        };
+      })
+    );
+
+    // Build trailing 30-day windows (Index 0 = 29 days ago, ..., Index 29 = Today/Now)
+    const trailing30dPromise = Promise.all(
+      Array.from({ length: 30 }, async (_, i) => {
+        const daysAgo = 29 - i;
+        const dStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysAgo, 0, 0, 0);
+        const dEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysAgo, 23, 59, 59, 999);
+
+        const [distinctSessionUsers, distinctLoginUsers] = await Promise.all([
+          db.collection(COLLECTIONS.SESSIONS).distinct('userId', {
+            $or: [
+              { lastUsedAt: { $gte: dStart, $lte: dEnd } },
+              { createdAt: { $gte: dStart, $lte: dEnd } },
+            ],
+          }),
+          db.collection(COLLECTIONS.USERS).distinct('_id', {
+            lastLoginAt: { $gte: dStart, $lte: dEnd },
+          }),
+        ]);
+
+        const uniqueUserIds = new Set([
+          ...distinctSessionUsers.map(String),
+          ...distinctLoginUsers.map(String),
+        ]);
+
+        if (i === 29) {
+          livePresences.forEach((p) => uniqueUserIds.add(p.userId));
+        }
+
+        return {
+          label: `${dStart.getDate()} ${dStart.toLocaleString('default', { month: 'short' })}`,
+          value: Math.max(i === 29 ? Math.max(activeUsersToday, currentLive) : 0, uniqueUserIds.size),
+        };
+      })
+    );
+
+    const [hours24Curve, days7Curve, days30Curve] = await Promise.all([
+      trailing24hPromise,
+      trailing7dPromise,
+      trailing30dPromise,
+    ]);
+
+    // Peak Online Telemetry
+    const max24hActive = Math.max(...hours24Curve.map((p) => p.value), currentLive);
+    const todayPeak = Math.max(currentLive, activeUsersToday, max24hActive);
+    const peakPoint24h = hours24Curve.reduce((prev, curr) => (curr.value >= prev.value ? curr : prev), hours24Curve[23]);
+    const todayPeakTime = peakPoint24h ? `${peakPoint24h.label} (Peak)` : 'Live Now';
+
+    const max30dActive = Math.max(...days30Curve.map((p) => p.value), todayPeak);
+    const allTimePeak = Math.max(todayPeak, max30dActive, totalUsers);
+    const peakPoint30d = days30Curve.reduce((prev, curr) => (curr.value >= prev.value ? curr : prev), days30Curve[29]);
+    const allTimePeakDate = peakPoint30d ? peakPoint30d.label : new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
     // Real seat fill rate & impact
     const seatsData = tripsSummaryAgg[0] || { totalSeats: 0, availableSeats: 0, totalFare: 0 };

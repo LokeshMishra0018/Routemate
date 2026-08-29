@@ -242,37 +242,49 @@ export const InteractiveTrendCurve: React.FC<InteractiveTrendCurveProps> = ({
             strokeLinejoin="round"
           />
 
-          {/* All-time / Default Peak Marker if not hovering */}
-          {peakPoint && hoverIndex === null && (
-            <g transform={`translate(${peakPoint.x}, ${peakPoint.y})`}>
-              {/* White glowing dot matching the user screenshot */}
-              <circle r="5.5" fill="#ffffff" stroke="#f59e0b" strokeWidth="2.5" className="animate-pulse" />
-              {/* Floating Tooltip Box */}
-              <g transform="translate(0, 26)">
-                <path d="M 0 -8 L -5 0 L 5 0 Z" fill="#090d16" stroke="#334155" strokeWidth="1" />
-                <rect
-                  x="-32"
-                  y="0"
-                  width="64"
-                  height="26"
-                  rx="6"
-                  fill="#090d16"
-                  stroke="#334155"
-                  strokeWidth="1"
-                />
-                <text
-                  x="0"
-                  y="17"
-                  textAnchor="middle"
-                  fill="#f8fafc"
-                  fontSize="12"
-                  fontWeight="bold"
-                  fontFamily="monospace"
-                >
-                  {peakPoint.data.value.toLocaleString()}
-                </text>
-              </g>
+          {/* Permanent Live Indicator at the Far Right End (Current Time) */}
+          {points.length > 0 && (
+            <g transform={`translate(${points[points.length - 1].x}, ${points[points.length - 1].y})`}>
+              <circle r="5" fill="#10b981" stroke="#ffffff" strokeWidth="1.5" />
+              <circle r="12" fill="#10b981" fillOpacity="0.3" className="animate-ping" />
             </g>
+          )}
+
+          {/* Peak or Live Marker if not actively hovering */}
+          {hoverIndex === null && points.length > 0 && (
+            (() => {
+              const activeTarget = currentLive > 0 ? points[points.length - 1] : peakPoint || points[points.length - 1];
+              return (
+                <g transform={`translate(${activeTarget.x}, ${activeTarget.y})`}>
+                  <circle r="6" fill="#ffffff" stroke="#f59e0b" strokeWidth="2.5" className="animate-pulse" />
+                  {/* Floating Tooltip Box */}
+                  <g transform="translate(0, 26)">
+                    <path d="M 0 -8 L -5 0 L 5 0 Z" fill="#090d16" stroke="#334155" strokeWidth="1" />
+                    <rect
+                      x="-38"
+                      y="0"
+                      width="76"
+                      height="26"
+                      rx="6"
+                      fill="#090d16"
+                      stroke="#334155"
+                      strokeWidth="1"
+                    />
+                    <text
+                      x="0"
+                      y="17"
+                      textAnchor="middle"
+                      fill="#f8fafc"
+                      fontSize="11"
+                      fontWeight="bold"
+                      fontFamily="monospace"
+                    >
+                      {activeTarget.data.value} {activeTarget.data.label === 'Now' || activeTarget.data.label === 'Today' ? 'Live' : 'Active'}
+                    </text>
+                  </g>
+                </g>
+              );
+            })()
           )}
 
           {/* Interactive Hover Point & Floating Tooltip */}
@@ -298,9 +310,9 @@ export const InteractiveTrendCurve: React.FC<InteractiveTrendCurveProps> = ({
               <g transform="translate(0, 26)">
                 <path d="M 0 -8 L -5 0 L 5 0 Z" fill="#020617" stroke="#475569" strokeWidth="1" />
                 <rect
-                  x="-42"
+                  x="-48"
                   y="0"
-                  width="84"
+                  width="96"
                   height="34"
                   rx="8"
                   fill="#020617"
@@ -317,7 +329,7 @@ export const InteractiveTrendCurve: React.FC<InteractiveTrendCurveProps> = ({
                   fontWeight="black"
                   fontFamily="monospace"
                 >
-                  {currentHoveredPoint.data.value.toLocaleString()} Active
+                  {currentHoveredPoint.data.value.toLocaleString()} {currentHoveredPoint.data.label === 'Now' ? 'Live Now' : 'Active'}
                 </text>
                 <text
                   x="0"
@@ -327,7 +339,7 @@ export const InteractiveTrendCurve: React.FC<InteractiveTrendCurveProps> = ({
                   fontSize="9"
                   fontWeight="600"
                 >
-                  {currentHoveredPoint.data.fullDate || currentHoveredPoint.data.label}
+                  {currentHoveredPoint.data.fullDate || (currentHoveredPoint.data.label === 'Now' ? 'Current Time' : currentHoveredPoint.data.label)}
                 </text>
               </g>
             </g>
@@ -335,12 +347,13 @@ export const InteractiveTrendCurve: React.FC<InteractiveTrendCurveProps> = ({
 
           {/* X-Axis Timeline Labels */}
           {points.map((p, i) => {
+            const isLast = i === points.length - 1;
             const showLabel =
               activeTab === '24h'
-                ? i % 4 === 0 || i === points.length - 1
+                ? i % 4 === 0 || isLast
                 : activeTab === '7d'
                 ? true
-                : i % 5 === 0 || i === points.length - 1;
+                : i % 5 === 0 || isLast;
 
             if (!showLabel) return null;
 
@@ -349,13 +362,13 @@ export const InteractiveTrendCurve: React.FC<InteractiveTrendCurveProps> = ({
                 key={i}
                 x={p.x}
                 y={height - 12}
-                textAnchor="middle"
-                fill="#64748b"
+                textAnchor={isLast ? 'end' : i === 0 ? 'start' : 'middle'}
+                fill={isLast ? '#34d399' : '#64748b'}
                 fontSize="10"
-                fontWeight="bold"
+                fontWeight={isLast ? '900' : 'bold'}
                 fontFamily="sans-serif"
               >
-                {p.data.label}
+                {isLast ? `🟢 ${p.data.label}` : p.data.label}
               </text>
             );
           })}
