@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
   MapContainer,
   TileLayer,
@@ -12,11 +12,10 @@ import {
   Maximize2,
   Minimize2,
   Navigation,
-  Layers,
   Sparkles,
   MapPin,
   Clock,
-  Car,
+  Globe,
 } from 'lucide-react';
 import { computeRoadRoute, RouteCalculationResult } from '../../services/routing.service';
 
@@ -38,6 +37,7 @@ export interface TripRouteMapProps {
 }
 
 type TileTheme = 'dark' | 'light' | 'satellite';
+type MapEngine = 'google' | 'leaflet';
 
 const TILE_LAYERS: Record<TileTheme, { url: string; attribution: string; name: string }> = {
   dark: {
@@ -56,6 +56,91 @@ const TILE_LAYERS: Record<TileTheme, { url: string; attribution: string; name: s
     attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS',
   },
 };
+
+const GOOGLE_DARK_STYLE: any[] = [
+  { elementType: 'geometry', stylers: [{ color: '#1e293b' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#0f172a' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#94a3b8' }] },
+  {
+    featureType: 'administrative.locality',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#cbd5e1' }],
+  },
+  {
+    featureType: 'poi',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#38bdf8' }],
+  },
+  {
+    featureType: 'poi.park',
+    elementType: 'geometry',
+    stylers: [{ color: '#14532d' }],
+  },
+  {
+    featureType: 'road',
+    elementType: 'geometry',
+    stylers: [{ color: '#334155' }],
+  },
+  {
+    featureType: 'road',
+    elementType: 'geometry.stroke',
+    stylers: [{ color: '#1e293b' }],
+  },
+  {
+    featureType: 'road',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#f1f5f9' }],
+  },
+  {
+    featureType: 'road.highway',
+    elementType: 'geometry',
+    stylers: [{ color: '#6366f1' }],
+  },
+  {
+    featureType: 'road.highway',
+    elementType: 'geometry.stroke',
+    stylers: [{ color: '#312e81' }],
+  },
+  {
+    featureType: 'water',
+    elementType: 'geometry',
+    stylers: [{ color: '#0f172a' }],
+  },
+  {
+    featureType: 'water',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#64748b' }],
+  },
+];
+
+/**
+ * Dynamically loads Google Maps JavaScript SDK
+ */
+function loadGoogleMapsScript(apiKey: string): Promise<any> {
+  if (typeof window === 'undefined') return Promise.reject(new Error('Window not available'));
+  const win = window as any;
+  if (win.google?.maps) {
+    return Promise.resolve(win.google);
+  }
+
+  return new Promise((resolve, reject) => {
+    const existingScript = document.getElementById('google-maps-sdk-script');
+    if (existingScript) {
+      existingScript.addEventListener('load', () => resolve(win.google));
+      existingScript.addEventListener('error', (e) => reject(e));
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.id = 'google-maps-sdk-script';
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places,routes,marker`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve(win.google);
+    script.onerror = (err) => reject(err);
+    document.head.appendChild(script);
+  });
+}
 
 /**
  * Creates custom styled HTML markers for Leaflet with pulsating animations
@@ -139,18 +224,42 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
   showStatsHud = true,
   onRouteCalculated,
 }) => {
+  const googleApiKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GOOGLE_MAPS_API_KEY) || '';
+  
+  const [engine, setEngine] = useState<MapEngine>(googleApiKey ? 'google' : 'leaflet');
   const [tileTheme, setTileTheme] = useState<TileTheme>('dark');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [routeResult, setRouteResult] = useState<RouteCalculationResult | null>(null);
   const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
+  const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
 
-  // Default fallback center: NCR / Delhi coordinates
-  const defaultCenter: [number, number] = useMemo(() => {
-    if (waypoints.length > 0 && waypoints[0].latitude) {
-      return [waypoints[0].latitude, waypoints[0].longitude];
-    }
-    return [28.6139, 77.209];
-  }, [waypoints]);
+  const googleMapRef = useRef<HTMLDivElement>(null);
+  const googleMapInstance = useRef<any>(null);
+  const googleMarkersRef = useRef<any[]>([]);
+  const googlePolylineRef = useRef<any[]>([]);
+
+  // Initialize Google Maps API Loader if Key is Present
+  useEffect(() => {
+    if (!googleApiKey || engine !== 'google') return;
+
+    let isMounted = true;
+    loadGoogleMapsScript(googleApiKey)
+      .then(() => {
+        if (isMounted) {
+          setIsGoogleLoaded(true);
+        }
+      })
+      .catch((err) => {
+        console.warn('Google Maps API failed to load, falling back to Leaflet OSM:', err);
+        if (isMounted) {
+          setEngine('leaflet');
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [googleApiKey, engine]);
 
   // Compute road polyline whenever waypoints change
   useEffect(() => {
@@ -185,6 +294,129 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
     };
   }, [waypoints, onRouteCalculated]);
 
+  // Render & Update Google Maps instance
+  useEffect(() => {
+    const win = window as any;
+    if (engine !== 'google' || !isGoogleLoaded || !googleMapRef.current || !win.google?.maps) return;
+
+    const validPoints = waypoints.filter(
+      (w) => typeof w.latitude === 'number' && !isNaN(w.latitude) && typeof w.longitude === 'number' && !isNaN(w.longitude)
+    );
+
+    const initialCenter = validPoints.length > 0
+      ? { lat: validPoints[0].latitude, lng: validPoints[0].longitude }
+      : { lat: 28.6139, lng: 77.209 };
+
+    if (!googleMapInstance.current) {
+      googleMapInstance.current = new win.google.maps.Map(googleMapRef.current, {
+        center: initialCenter,
+        zoom: 12,
+        disableDefaultUI: !interactive,
+        zoomControl: interactive,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+        styles: tileTheme === 'dark' ? GOOGLE_DARK_STYLE : undefined,
+        mapTypeId: tileTheme === 'satellite' ? win.google.maps.MapTypeId.HYBRID : win.google.maps.MapTypeId.ROADMAP,
+      });
+    } else {
+      const map = googleMapInstance.current;
+      map.setOptions({
+        styles: tileTheme === 'dark' ? GOOGLE_DARK_STYLE : undefined,
+        mapTypeId: tileTheme === 'satellite' ? win.google.maps.MapTypeId.HYBRID : win.google.maps.MapTypeId.ROADMAP,
+      });
+    }
+
+    const map = googleMapInstance.current;
+
+    // Clear previous markers
+    googleMarkersRef.current.forEach((m) => m.setMap(null));
+    googleMarkersRef.current = [];
+
+    // Clear previous polylines
+    googlePolylineRef.current.forEach((p) => p.setMap(null));
+    googlePolylineRef.current = [];
+
+    const bounds = new win.google.maps.LatLngBounds();
+
+    // Add Google Markers
+    validPoints.forEach((wp, idx) => {
+      const pos = { lat: wp.latitude, lng: wp.longitude };
+      bounds.extend(pos);
+
+      const markerColor = wp.type === 'origin' ? '00e676' : wp.type === 'destination' ? 'ffb300' : '00b0ff';
+      const markerLetter = wp.type === 'origin' ? 'A' : wp.type === 'destination' ? 'B' : `${wp.sequenceNumber || idx}`;
+
+      const marker = new win.google.maps.Marker({
+        position: pos,
+        map,
+        title: wp.name,
+        label: {
+          text: markerLetter,
+          color: '#ffffff',
+          fontWeight: 'bold',
+        },
+        icon: {
+          url: `https://chart.googleapis.com/chart?chst=d_map_pin_letter&chld=${markerLetter}|${markerColor}|000000`,
+          scaledSize: new win.google.maps.Size(26, 40),
+        },
+      });
+
+      const infoWindow = new win.google.maps.InfoWindow({
+        content: `<div style="color: #0f172a; padding: 4px;"><strong>${wp.name}</strong><br/><span style="font-size: 11px; text-transform: uppercase;">${wp.type}</span></div>`,
+      });
+
+      marker.addListener('click', () => {
+        infoWindow.open(map, marker);
+      });
+
+      googleMarkersRef.current.push(marker);
+    });
+
+    // Draw Google Road Polyline
+    if (routeResult && routeResult.coordinates.length > 1) {
+      const path = routeResult.coordinates.map(([lat, lng]) => ({ lat, lng }));
+
+      // Outer glow line
+      const outerGlow = new win.google.maps.Polyline({
+        path,
+        geodesic: true,
+        strokeColor: '#6366f1',
+        strokeOpacity: 0.4,
+        strokeWeight: 8,
+        map,
+      });
+
+      // Core route line
+      const coreRoute = new win.google.maps.Polyline({
+        path,
+        geodesic: true,
+        strokeColor: '#38bdf8',
+        strokeOpacity: 0.95,
+        strokeWeight: 4,
+        map,
+      });
+
+      googlePolylineRef.current.push(outerGlow, coreRoute);
+
+      path.forEach((pt) => bounds.extend(pt));
+    }
+
+    if (validPoints.length > 1 || (routeResult && routeResult.coordinates.length > 1)) {
+      map.fitBounds(bounds);
+    } else if (validPoints.length === 1) {
+      map.setCenter({ lat: validPoints[0].latitude, lng: validPoints[0].longitude });
+      map.setZoom(14);
+    }
+  }, [engine, isGoogleLoaded, waypoints, routeResult, tileTheme, interactive]);
+
+  const defaultCenter: [number, number] = useMemo(() => {
+    if (waypoints.length > 0 && waypoints[0].latitude) {
+      return [waypoints[0].latitude, waypoints[0].longitude];
+    }
+    return [28.6139, 77.209];
+  }, [waypoints]);
+
   const activeTile = TILE_LAYERS[tileTheme];
 
   return (
@@ -195,6 +427,23 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
     >
       {/* Floating Map Controls Toolbar */}
       <div className="absolute top-3 right-3 z-[1000] flex items-center gap-2">
+        {/* Engine Switcher (Google Maps vs OpenStreetMap) */}
+        {googleApiKey && (
+          <button
+            type="button"
+            onClick={() => setEngine(engine === 'google' ? 'leaflet' : 'google')}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs font-semibold shadow-lg backdrop-blur-md transition-all ${
+              engine === 'google'
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                : 'bg-slate-900/90 text-slate-300 border-slate-700/60 hover:bg-slate-800'
+            }`}
+            title="Switch Map Provider"
+          >
+            <Globe className="w-3.5 h-3.5" />
+            <span>{engine === 'google' ? 'Google Maps' : 'OpenStreetMap'}</span>
+          </button>
+        )}
+
         {/* Tile Theme Switcher */}
         <div className="flex items-center p-1 rounded-xl bg-slate-900/90 border border-slate-700/60 shadow-lg backdrop-blur-md text-xs">
           <button
@@ -203,7 +452,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
             className={`px-2 py-1 rounded-lg transition-all ${
               tileTheme === 'dark' ? 'bg-indigo-600 text-white font-medium shadow' : 'text-slate-400 hover:text-slate-200'
             }`}
-            title="Dark Matter Theme"
+            title="Dark Theme"
           >
             🌙 Dark
           </button>
@@ -274,87 +523,94 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
         </div>
       )}
 
-      {/* Main Leaflet Map Engine */}
-      <MapContainer
-        center={defaultCenter}
-        zoom={12}
-        scrollWheelZoom={interactive}
-        dragging={interactive}
-        doubleClickZoom={interactive}
-        zoomControl={interactive}
-        className="w-full h-full min-h-[240px]"
-      >
-        <TileLayer url={activeTile.url} attribution={activeTile.attribution} maxZoom={19} />
+      {/* Render Google Maps Engine */}
+      {engine === 'google' && googleApiKey && (
+        <div ref={googleMapRef} className="w-full h-full min-h-[240px]" />
+      )}
 
-        <MapAutoFitController
-          waypoints={waypoints}
-          routeCoords={routeResult?.coordinates || []}
-        />
+      {/* Render Fallback Leaflet Map Engine */}
+      {(engine === 'leaflet' || !googleApiKey) && (
+        <MapContainer
+          center={defaultCenter}
+          zoom={12}
+          scrollWheelZoom={interactive}
+          dragging={interactive}
+          doubleClickZoom={interactive}
+          zoomControl={interactive}
+          className="w-full h-full min-h-[240px]"
+        >
+          <TileLayer url={activeTile.url} attribution={activeTile.attribution} maxZoom={19} />
 
-        {/* Render Road Polyline with Glowing Effect */}
-        {routeResult && routeResult.coordinates.length > 1 && (
-          <>
-            {/* Outer Glow Line */}
-            <Polyline
-              positions={routeResult.coordinates}
-              pathOptions={{
-                color: '#6366f1',
-                weight: 8,
-                opacity: 0.35,
-                lineCap: 'round',
-                lineJoin: 'round',
-              }}
-            />
-            {/* Core Highway Line */}
-            <Polyline
-              positions={routeResult.coordinates}
-              pathOptions={{
-                color: '#38bdf8',
-                weight: 4,
-                opacity: 0.95,
-                lineCap: 'round',
-                lineJoin: 'round',
-              }}
-            />
-          </>
-        )}
+          <MapAutoFitController
+            waypoints={waypoints}
+            routeCoords={routeResult?.coordinates || []}
+          />
 
-        {/* Render Markers for Origin, Intermediate Stops, and Destination */}
-        {waypoints.map((wp, index) => {
-          if (!wp.latitude || !wp.longitude) return null;
+          {/* Render Road Polyline with Glowing Effect */}
+          {routeResult && routeResult.coordinates.length > 1 && (
+            <>
+              {/* Outer Glow Line */}
+              <Polyline
+                positions={routeResult.coordinates}
+                pathOptions={{
+                  color: '#6366f1',
+                  weight: 8,
+                  opacity: 0.35,
+                  lineCap: 'round',
+                  lineJoin: 'round',
+                }}
+              />
+              {/* Core Highway Line */}
+              <Polyline
+                positions={routeResult.coordinates}
+                pathOptions={{
+                  color: '#38bdf8',
+                  weight: 4,
+                  opacity: 0.95,
+                  lineCap: 'round',
+                  lineJoin: 'round',
+                }}
+              />
+            </>
+          )}
 
-          return (
-            <Marker
-              key={`${wp.type}-${index}-${wp.latitude}-${wp.longitude}`}
-              position={[wp.latitude, wp.longitude]}
-              icon={createCustomIcon(wp.type, wp.sequenceNumber)}
-            >
-              <Popup>
-                <div className="p-1 space-y-1">
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${
-                        wp.type === 'origin'
-                          ? 'bg-emerald-500/20 text-emerald-400'
-                          : wp.type === 'destination'
-                          ? 'bg-amber-500/20 text-amber-400'
-                          : 'bg-sky-500/20 text-sky-400'
-                      }`}
-                    >
-                      {wp.type === 'stop' ? `Stop #${wp.sequenceNumber || index}` : wp.type}
-                    </span>
-                    <h4 className="text-xs font-bold text-slate-100">{wp.name}</h4>
+          {/* Render Markers for Origin, Intermediate Stops, and Destination */}
+          {waypoints.map((wp, index) => {
+            if (!wp.latitude || !wp.longitude) return null;
+
+            return (
+              <Marker
+                key={`${wp.type}-${index}-${wp.latitude}-${wp.longitude}`}
+                position={[wp.latitude, wp.longitude]}
+                icon={createCustomIcon(wp.type, wp.sequenceNumber)}
+              >
+                <Popup>
+                  <div className="p-1 space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${
+                          wp.type === 'origin'
+                            ? 'bg-emerald-500/20 text-emerald-400'
+                            : wp.type === 'destination'
+                            ? 'bg-amber-500/20 text-amber-400'
+                            : 'bg-sky-500/20 text-sky-400'
+                        }`}
+                      >
+                        {wp.type === 'stop' ? `Stop #${wp.sequenceNumber || index}` : wp.type}
+                      </span>
+                      <h4 className="text-xs font-bold text-slate-100">{wp.name}</h4>
+                    </div>
+                    {wp.info && <p className="text-[11px] text-slate-300">{wp.info}</p>}
+                    <p className="text-[10px] text-slate-400 font-mono">
+                      {wp.latitude.toFixed(4)}, {wp.longitude.toFixed(4)}
+                    </p>
                   </div>
-                  {wp.info && <p className="text-[11px] text-slate-300">{wp.info}</p>}
-                  <p className="text-[10px] text-slate-400 font-mono">
-                    {wp.latitude.toFixed(4)}, {wp.longitude.toFixed(4)}
-                  </p>
-                </div>
-              </Popup>
-            </Marker>
-          );
-        })}
-      </MapContainer>
+                </Popup>
+              </Marker>
+            );
+          })}
+        </MapContainer>
+      )}
     </div>
   );
 };
