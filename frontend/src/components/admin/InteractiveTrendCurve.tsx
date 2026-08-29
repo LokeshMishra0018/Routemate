@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { TrendingUp, Sparkles, Calendar, Clock, Activity } from 'lucide-react';
+import { TrendingUp, Sparkles, Clock, Activity, Zap, Radio } from 'lucide-react';
 
 export interface CurvePoint {
   label: string;
@@ -9,6 +9,7 @@ export interface CurvePoint {
 }
 
 interface InteractiveTrendCurveProps {
+  data1h?: CurvePoint[];
   data24h: CurvePoint[];
   data7d: CurvePoint[];
   data30d: CurvePoint[];
@@ -20,6 +21,7 @@ interface InteractiveTrendCurveProps {
 }
 
 export const InteractiveTrendCurve: React.FC<InteractiveTrendCurveProps> = ({
+  data1h = [],
   data24h,
   data7d,
   data30d,
@@ -29,35 +31,37 @@ export const InteractiveTrendCurve: React.FC<InteractiveTrendCurveProps> = ({
   allTimePeakDate,
   currentLive,
 }) => {
-  const [activeTab, setActiveTab] = useState<'24h' | '7d' | '30d'>('24h');
+  const [activeTab, setActiveTab] = useState<'1h' | '24h' | '7d' | '30d'>('24h');
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const activeData = useMemo(() => {
+    if (activeTab === '1h') return data1h.length > 0 ? data1h : data24h;
     if (activeTab === '7d') return data7d.length > 0 ? data7d : data24h;
     if (activeTab === '30d') return data30d.length > 0 ? data30d : data24h;
     return data24h;
-  }, [activeTab, data24h, data7d, data30d]);
+  }, [activeTab, data1h, data24h, data7d, data30d]);
 
-  const width = 800;
-  const height = 240;
-  const paddingX = 40;
-  const paddingTop = 30;
-  const paddingBottom = 40;
+  const width = 860;
+  const height = 260;
+  const paddingLeft = 45;
+  const paddingRight = 45;
+  const paddingTop = 35;
+  const paddingBottom = 45;
 
-  const chartWidth = width - paddingX * 2;
+  const chartWidth = width - paddingLeft - paddingRight;
   const chartHeight = height - paddingTop - paddingBottom;
 
   const values = activeData.map((d) => d.value);
-  const maxValue = Math.max(...values, 10);
-  const minValue = Math.min(...values, 0);
+  const maxValue = Math.max(...values, 6);
+  const minValue = 0;
   const range = maxValue - minValue || 1;
 
-  // Calculate coordinates for each point
+  // Calculate coordinates for each point with smooth tangent bounds
   const points = useMemo(() => {
     if (activeData.length === 0) return [];
     return activeData.map((d, index) => {
-      const x = paddingX + (index / (activeData.length - 1 || 1)) * chartWidth;
+      const x = paddingLeft + (index / (activeData.length - 1 || 1)) * chartWidth;
       const y = paddingTop + chartHeight - ((d.value - minValue) / range) * chartHeight;
       return { x, y, data: d, index };
     });
@@ -78,7 +82,7 @@ export const InteractiveTrendCurve: React.FC<InteractiveTrendCurveProps> = ({
     return path;
   }, [points]);
 
-  // Area path for gradient background
+  // Area path for glowing aura fill
   const areaPath = useMemo(() => {
     if (points.length === 0) return '';
     const first = points[0];
@@ -112,234 +116,250 @@ export const InteractiveTrendCurve: React.FC<InteractiveTrendCurveProps> = ({
   const currentHoveredPoint = hoverIndex !== null && points[hoverIndex] ? points[hoverIndex] : null;
   const peakPoint = useMemo(() => {
     if (points.length === 0) return null;
-    return points.reduce((prev, curr) => (curr.data.value > prev.data.value ? curr : prev), points[0]);
+    return points.reduce((prev, curr) => (curr.data.value >= prev.data.value ? curr : prev), points[0]);
   }, [points]);
 
+  const activeTarget = hoverIndex !== null ? currentHoveredPoint : (points.length > 0 ? points[points.length - 1] : null);
+
   return (
-    <div className="bg-slate-900/70 rounded-2xl border border-slate-800 p-5 space-y-4 shadow-xl">
+    <div className="bg-slate-900/80 rounded-2xl border border-slate-800/90 p-5 space-y-4 shadow-2xl backdrop-blur-md relative overflow-hidden">
+      {/* Background Subtle Cyberpunk Ambient Glow */}
+      <div className="absolute top-0 right-1/4 w-96 h-32 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-0 left-1/3 w-96 h-32 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
+
       {/* Top Header & Tab Switcher */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-3 border-b border-slate-800/80 relative z-10">
         <div>
-          <div className="flex items-center gap-2">
-            <Activity className="w-4 h-4 text-amber-400 animate-pulse" />
-            <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-              Concurrent Commuter Online Telemetry
-              <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
-                Live Curve
-              </span>
-            </h3>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(245,158,11,0.15)]">
+              <Activity className="w-4 h-4 text-amber-400 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm font-black text-white tracking-tight">
+                  Concurrent Commuter Telemetry
+                </h3>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-black uppercase tracking-wider">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                  Live Stream
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Real-time active student presence with live interactive telemetry scrubber
+              </p>
+            </div>
           </div>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Real-time active student presence curve with live interactive peak detection
-          </p>
         </div>
 
-        {/* Timeframe Switcher Tabs */}
-        <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800 self-start sm:self-auto">
-          <button
-            type="button"
-            onClick={() => setActiveTab('24h')}
-            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-              activeTab === '24h'
-                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            24 Hours
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('7d')}
-            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-              activeTab === '7d'
-                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            7 Days
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('30d')}
-            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-              activeTab === '30d'
-                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            30 Days
-          </button>
+        {/* Timeframe Switcher Tabs & Live Mini Badge */}
+        <div className="flex items-center gap-2 flex-wrap self-start lg:self-auto">
+          <div className="flex items-center gap-1 bg-slate-950/90 p-1 rounded-xl border border-slate-800/90 shadow-inner">
+            <button
+              type="button"
+              onClick={() => setActiveTab('1h')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeTab === '1h'
+                  ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md shadow-amber-500/20'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              1 Hour
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('24h')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeTab === '24h'
+                  ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md shadow-amber-500/20'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              24 Hours
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('7d')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeTab === '7d'
+                  ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md shadow-amber-500/20'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              7 Days
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('30d')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeTab === '30d'
+                  ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md shadow-amber-500/20'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              30 Days
+            </button>
+          </div>
         </div>
       </div>
 
       {/* SVG Interactive Spline Graph Container */}
-      <div ref={containerRef} className="relative w-full overflow-hidden select-none bg-slate-950/60 rounded-xl border border-slate-800/60 pt-2 pb-1">
+      <div
+        ref={containerRef}
+        className="relative w-full overflow-hidden select-none bg-slate-950/70 rounded-2xl border border-slate-800/80 pt-3 pb-2 px-1 shadow-inner"
+      >
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          className="w-full h-48 sm:h-56 cursor-crosshair overflow-visible"
+          className="w-full h-52 sm:h-64 cursor-crosshair overflow-visible"
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
         >
           <defs>
-            {/* Smooth glowing area gradient */}
-            <linearGradient id="curveAreaGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.25" />
-              <stop offset="60%" stopColor="#6366f1" stopOpacity="0.08" />
-              <stop offset="100%" stopColor="#0f172a" stopOpacity="0.0" />
+            {/* Multi-stop Glowing Area Gradient */}
+            <linearGradient id="cyberpunkAuraGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.32" />
+              <stop offset="35%" stopColor="#8b5cf6" stopOpacity="0.18" />
+              <stop offset="70%" stopColor="#6366f1" stopOpacity="0.08" />
+              <stop offset="100%" stopColor="#030712" stopOpacity="0.0" />
             </linearGradient>
 
-            {/* Glowing line stroke gradient */}
-            <linearGradient id="curveLineGradient" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="#f59e0b" />
-              <stop offset="50%" stopColor="#fbbf24" />
-              <stop offset="100%" stopColor="#f59e0b" />
+            {/* Glowing Spline Stroke Gradient */}
+            <linearGradient id="cyberpunkLineGradient" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#6366f1" />
+              <stop offset="40%" stopColor="#8b5cf6" />
+              <stop offset="75%" stopColor="#f59e0b" />
+              <stop offset="100%" stopColor="#10b981" />
             </linearGradient>
 
-            {/* Glow Filter */}
-            <filter id="lineGlow" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur stdDeviation="3" result="blur" />
-              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            {/* Intense Neon Line Glow Filter */}
+            <filter id="neonLineGlow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="4" result="blur1" />
+              <feGaussianBlur stdDeviation="8" result="blur2" />
+              <feMerge>
+                <feMergeNode in="blur2" />
+                <feMergeNode in="blur1" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
             </filter>
           </defs>
 
-          {/* Horizontal grid lines */}
-          {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => {
+          {/* Horizontal Level Grid Lines & Left Y-Axis Values */}
+          {[0, 0.33, 0.66, 1].map((pct, i) => {
             const y = paddingTop + chartHeight * pct;
+            const levelVal = Math.round(maxValue - pct * range);
             return (
-              <line
-                key={i}
-                x1={paddingX}
-                y1={y}
-                x2={width - paddingX}
-                y2={y}
-                stroke="#1e293b"
-                strokeDasharray="4 4"
-                strokeWidth="1"
-              />
+              <g key={i}>
+                <line
+                  x1={paddingLeft}
+                  y1={y}
+                  x2={width - paddingRight}
+                  y2={y}
+                  stroke="#1e293b"
+                  strokeDasharray="3 3"
+                  strokeWidth="1"
+                  opacity="0.7"
+                />
+                <text
+                  x={paddingLeft - 8}
+                  y={y + 3.5}
+                  textAnchor="end"
+                  fill="#475569"
+                  fontSize="9"
+                  fontWeight="bold"
+                  fontFamily="monospace"
+                >
+                  {levelVal}
+                </text>
+              </g>
             );
           })}
 
           {/* Area Fill */}
-          <path d={areaPath} fill="url(#curveAreaGradient)" />
+          <path d={areaPath} fill="url(#cyberpunkAuraGradient)" />
 
-          {/* Glow Behind Main Spline Line */}
+          {/* Glowing Shadow Behind Main Spline Line */}
           <path
             d={svgPath}
             fill="none"
-            stroke="#f59e0b"
+            stroke="url(#cyberpunkLineGradient)"
             strokeWidth="5"
-            strokeOpacity="0.35"
-            filter="url(#lineGlow)"
+            strokeOpacity="0.4"
+            filter="url(#neonLineGlow)"
           />
 
           {/* Main Spline Line */}
           <path
             d={svgPath}
             fill="none"
-            stroke="url(#curveLineGradient)"
-            strokeWidth="2.5"
+            stroke="url(#cyberpunkLineGradient)"
+            strokeWidth="3"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
 
-          {/* Permanent Live Indicator at the Far Right End (Current Time) */}
+          {/* Permanent Live Indicator at the Far Right End (Current Moment) */}
           {points.length > 0 && (
             <g transform={`translate(${points[points.length - 1].x}, ${points[points.length - 1].y})`}>
-              <circle r="5" fill="#10b981" stroke="#ffffff" strokeWidth="1.5" />
-              <circle r="12" fill="#10b981" fillOpacity="0.3" className="animate-ping" />
+              {/* Dual Concentric Sonar Wave Ping */}
+              <circle r="16" fill="#10b981" fillOpacity="0.1" className="animate-pulse" />
+              <circle r="10" fill="#10b981" fillOpacity="0.25" className="animate-ping" />
+              <circle r="5" fill="#10b981" stroke="#ffffff" strokeWidth="2" />
             </g>
           )}
 
-          {/* Peak or Live Marker if not actively hovering */}
-          {hoverIndex === null && points.length > 0 && (
-            (() => {
-              const activeTarget = currentLive > 0 ? points[points.length - 1] : peakPoint || points[points.length - 1];
-              return (
-                <g transform={`translate(${activeTarget.x}, ${activeTarget.y})`}>
-                  <circle r="6" fill="#ffffff" stroke="#f59e0b" strokeWidth="2.5" className="animate-pulse" />
-                  {/* Floating Tooltip Box */}
-                  <g transform="translate(0, 26)">
-                    <path d="M 0 -8 L -5 0 L 5 0 Z" fill="#090d16" stroke="#334155" strokeWidth="1" />
-                    <rect
-                      x="-38"
-                      y="0"
-                      width="76"
-                      height="26"
-                      rx="6"
-                      fill="#090d16"
-                      stroke="#334155"
-                      strokeWidth="1"
-                    />
-                    <text
-                      x="0"
-                      y="17"
-                      textAnchor="middle"
-                      fill="#f8fafc"
-                      fontSize="11"
-                      fontWeight="bold"
-                      fontFamily="monospace"
-                    >
-                      {activeTarget.data.value} {activeTarget.data.label === 'Now' || activeTarget.data.label === 'Today' ? 'Live' : 'Active'}
-                    </text>
-                  </g>
-                </g>
-              );
-            })()
-          )}
-
-          {/* Interactive Hover Point & Floating Tooltip */}
-          {currentHoveredPoint && (
-            <g transform={`translate(${currentHoveredPoint.x}, ${currentHoveredPoint.y})`}>
-              {/* Vertical Crosshair Guide */}
+          {/* Laser Scrubber Guide Bar & Illuminated Hover Tooltip */}
+          {activeTarget && (
+            <g transform={`translate(${activeTarget.x}, ${activeTarget.y})`}>
+              {/* Vertical Laser Scrubber Guide Line */}
               <line
                 x1="0"
-                y1={-currentHoveredPoint.y + paddingTop}
+                y1={-activeTarget.y + paddingTop}
                 x2="0"
-                y2={paddingTop + chartHeight - currentHoveredPoint.y}
-                stroke="#64748b"
-                strokeDasharray="2 2"
-                strokeWidth="1"
-                opacity="0.6"
+                y2={paddingTop + chartHeight - activeTarget.y}
+                stroke="#818cf8"
+                strokeDasharray="3 3"
+                strokeWidth="1.5"
+                opacity={hoverIndex !== null ? '0.9' : '0.4'}
               />
 
-              {/* White Glowing Dot */}
-              <circle r="7" fill="#ffffff" stroke="#f59e0b" strokeWidth="3" />
-              <circle r="12" fill="#f59e0b" fillOpacity="0.25" className="animate-ping" />
+              {/* Glowing Dot on Line */}
+              <circle r="7" fill="#ffffff" stroke="#f59e0b" strokeWidth="3" className="shadow-lg" />
+              <circle r="13" fill="#f59e0b" fillOpacity="0.2" className="animate-ping" />
 
-              {/* Floating Dark Tooltip Box */}
-              <g transform="translate(0, 26)">
-                <path d="M 0 -8 L -5 0 L 5 0 Z" fill="#020617" stroke="#475569" strokeWidth="1" />
+              {/* Glassmorphic Floating HUD Tooltip */}
+              <g transform="translate(0, 28)">
+                <path d="M 0 -8 L -6 0 L 6 0 Z" fill="#030712" stroke="#475569" strokeWidth="1" />
                 <rect
-                  x="-48"
+                  x="-52"
                   y="0"
-                  width="96"
-                  height="34"
+                  width="104"
+                  height="36"
                   rx="8"
-                  fill="#020617"
+                  fill="#030712"
+                  fillOpacity="0.95"
                   stroke="#475569"
                   strokeWidth="1.5"
-                  filter="drop-shadow(0 4px 6px rgba(0,0,0,0.5))"
+                  filter="drop-shadow(0 8px 16px rgba(0,0,0,0.7))"
                 />
                 <text
                   x="0"
                   y="16"
                   textAnchor="middle"
-                  fill="#fbbf24"
+                  fill={activeTarget.data.label === 'Now' ? '#34d399' : '#fbbf24'}
                   fontSize="12"
-                  fontWeight="black"
+                  fontWeight="900"
                   fontFamily="monospace"
                 >
-                  {currentHoveredPoint.data.value.toLocaleString()} {currentHoveredPoint.data.label === 'Now' ? 'Live Now' : 'Active'}
+                  {activeTarget.data.value.toLocaleString()} {activeTarget.data.label === 'Now' ? 'Live Now' : 'Active'}
                 </text>
                 <text
                   x="0"
-                  y="28"
+                  y="29"
                   textAnchor="middle"
                   fill="#94a3b8"
                   fontSize="9"
-                  fontWeight="600"
+                  fontWeight="bold"
                 >
-                  {currentHoveredPoint.data.fullDate || (currentHoveredPoint.data.label === 'Now' ? 'Current Time' : currentHoveredPoint.data.label)}
+                  {activeTarget.data.fullDate || (activeTarget.data.label === 'Now' ? 'Current Moment' : activeTarget.data.label)}
                 </text>
               </g>
             </g>
@@ -348,8 +368,11 @@ export const InteractiveTrendCurve: React.FC<InteractiveTrendCurveProps> = ({
           {/* X-Axis Timeline Labels */}
           {points.map((p, i) => {
             const isLast = i === points.length - 1;
+            const isFirst = i === 0;
             const showLabel =
-              activeTab === '24h'
+              activeTab === '1h'
+                ? i % 2 === 0 || isLast
+                : activeTab === '24h'
                 ? i % 4 === 0 || isLast
                 : activeTab === '7d'
                 ? true
@@ -362,7 +385,7 @@ export const InteractiveTrendCurve: React.FC<InteractiveTrendCurveProps> = ({
                 key={i}
                 x={p.x}
                 y={height - 12}
-                textAnchor={isLast ? 'end' : i === 0 ? 'start' : 'middle'}
+                textAnchor={isLast ? 'end' : isFirst ? 'start' : 'middle'}
                 fill={isLast ? '#34d399' : '#64748b'}
                 fontSize="10"
                 fontWeight={isLast ? '900' : 'bold'}
@@ -375,39 +398,45 @@ export const InteractiveTrendCurve: React.FC<InteractiveTrendCurveProps> = ({
         </svg>
       </div>
 
-      {/* Peak Online Highlights Footer */}
+      {/* Peak Online Telemetry Metrics Footer */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-        <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800/80 flex items-center justify-between">
+        <div className="p-3.5 rounded-xl bg-slate-950/90 border border-slate-800 flex items-center justify-between shadow-sm">
           <div>
-            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Live Online Now</span>
-            <span className="text-lg font-black text-emerald-400 font-mono flex items-center gap-1.5 mt-0.5">
+            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider flex items-center gap-1">
+              <Radio className="w-3 h-3 text-emerald-400 animate-pulse" /> Live Online Now
+            </span>
+            <span className="text-xl font-black text-emerald-400 font-mono flex items-center gap-2 mt-0.5">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
               {currentLive} Commuters
             </span>
           </div>
-          <Clock className="w-5 h-5 text-emerald-500/40" />
+          <Clock className="w-5 h-5 text-emerald-500/30" />
         </div>
 
-        <div className="p-3 rounded-xl bg-slate-950/80 border border-amber-500/20 flex items-center justify-between">
+        <div className="p-3.5 rounded-xl bg-slate-950/90 border border-amber-500/20 flex items-center justify-between shadow-sm">
           <div>
-            <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider block">Today's Peak Online</span>
-            <span className="text-lg font-black text-amber-300 font-mono mt-0.5 block">
+            <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider flex items-center gap-1">
+              <Zap className="w-3 h-3 text-amber-400" /> Today's Peak Online
+            </span>
+            <span className="text-xl font-black text-amber-300 font-mono mt-0.5 block">
               {todayPeak} {todayPeak === 1 ? 'Commuter' : 'Commuters'}
             </span>
-            <span className="text-[10px] text-slate-500">{todayPeakTime || 'Active Today'}</span>
+            <span className="text-[10px] text-slate-500 font-mono">{todayPeakTime || 'Active Today'}</span>
           </div>
-          <TrendingUp className="w-5 h-5 text-amber-500/40" />
+          <TrendingUp className="w-5 h-5 text-amber-500/30" />
         </div>
 
-        <div className="p-3 rounded-xl bg-slate-950/80 border border-indigo-500/20 flex items-center justify-between">
+        <div className="p-3.5 rounded-xl bg-slate-950/90 border border-indigo-500/20 flex items-center justify-between shadow-sm">
           <div>
-            <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider block">All-Time Peak Record</span>
-            <span className="text-lg font-black text-indigo-300 font-mono mt-0.5 block">
+            <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-indigo-400" /> All-Time Peak Record
+            </span>
+            <span className="text-xl font-black text-indigo-300 font-mono mt-0.5 block">
               {allTimePeak} {allTimePeak === 1 ? 'Commuter' : 'Commuters'}
             </span>
-            <span className="text-[10px] text-slate-500">{allTimePeakDate || 'Platform Record'}</span>
+            <span className="text-[10px] text-slate-500 font-mono">{allTimePeakDate || 'Platform Record'}</span>
           </div>
-          <Sparkles className="w-5 h-5 text-indigo-500/40" />
+          <Sparkles className="w-5 h-5 text-indigo-500/30" />
         </div>
       </div>
     </div>

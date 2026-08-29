@@ -724,8 +724,46 @@ export class AdminService {
     const googleCount = googleUsersList.length;
     const emailPasswordCount = Math.max(0, totalUsers - googleCount);
 
-    // Real Peak Online & Trailing 24-Hour Active Commuter Activity
+    // Real Peak Online & Trailing Active Commuter Activity
     const currentLive = liveUsersOnline;
+
+    // Build trailing 1-hour windows (12 intervals of 5 minutes: Index 0 = 55m ago, ..., Index 11 = NOW)
+    const trailing1hPromise = Promise.all(
+      Array.from({ length: 12 }, async (_, i) => {
+        const minsAgo = (11 - i) * 5;
+        const windowStart = new Date(now.getTime() - (minsAgo + 5) * 60 * 1000);
+        const windowEnd = new Date(now.getTime() - minsAgo * 60 * 1000);
+
+        const [distinctSessionUsers, distinctLoginUsers] = await Promise.all([
+          db.collection(COLLECTIONS.SESSIONS).distinct('userId', {
+            $or: [
+              { lastUsedAt: { $gte: windowStart, $lte: windowEnd } },
+              { createdAt: { $gte: windowStart, $lte: windowEnd } },
+            ],
+          }),
+          db.collection(COLLECTIONS.USERS).distinct('_id', {
+            lastLoginAt: { $gte: windowStart, $lte: windowEnd },
+          }),
+        ]);
+
+        const uniqueUserIds = new Set([
+          ...distinctSessionUsers.map(String),
+          ...distinctLoginUsers.map(String),
+        ]);
+
+        const pointTime = new Date(now.getTime() - minsAgo * 60 * 1000);
+        const timeLabel =
+          i === 11
+            ? 'Now'
+            : pointTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+
+        return {
+          label: timeLabel,
+          fullDate: pointTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          value: i === 11 ? currentLive : uniqueUserIds.size,
+        };
+      })
+    );
 
     // Build trailing 24-hour windows (Index 0 = 23h ago, ..., Index 23 = NOW)
     const trailing24hPromise = Promise.all(
@@ -751,11 +789,6 @@ export class AdminService {
           ...distinctLoginUsers.map(String),
         ]);
 
-        // If it's the current hour (last point), include all current live socket users
-        if (i === 23) {
-          livePresences.forEach((p) => uniqueUserIds.add(p.userId));
-        }
-
         const pointTime = new Date(now.getTime() - hoursAgo * 60 * 60 * 1000);
         const timeLabel =
           i === 23
@@ -765,7 +798,7 @@ export class AdminService {
         return {
           label: timeLabel,
           hour: pointTime.getHours(),
-          value: Math.max(i === 23 ? currentLive : 0, uniqueUserIds.size),
+          value: i === 23 ? currentLive : uniqueUserIds.size,
         };
       })
     );
@@ -802,7 +835,7 @@ export class AdminService {
         return {
           label: i === 6 ? 'Today' : dayNames[dStart.getDay()],
           fullDate: `${dStart.getDate()} ${dStart.toLocaleString('default', { month: 'short' })}`,
-          value: Math.max(i === 6 ? Math.max(activeUsersToday, currentLive) : 0, uniqueUserIds.size),
+          value: i === 6 ? Math.max(activeUsersToday, currentLive) : uniqueUserIds.size,
         };
       })
     );
@@ -837,12 +870,13 @@ export class AdminService {
 
         return {
           label: `${dStart.getDate()} ${dStart.toLocaleString('default', { month: 'short' })}`,
-          value: Math.max(i === 29 ? Math.max(activeUsersToday, currentLive) : 0, uniqueUserIds.size),
+          value: i === 29 ? Math.max(activeUsersToday, currentLive) : uniqueUserIds.size,
         };
       })
     );
 
-    const [hours24Curve, days7Curve, days30Curve] = await Promise.all([
+    const [hours1Curve, hours24Curve, days7Curve, days30Curve] = await Promise.all([
+      trailing1hPromise,
       trailing24hPromise,
       trailing7dPromise,
       trailing30dPromise,
@@ -939,6 +973,7 @@ export class AdminService {
         },
       },
       trendCurves: {
+        hours1: hours1Curve,
         hours24: hours24Curve,
         days7: days7Curve,
         days30: days30Curve,

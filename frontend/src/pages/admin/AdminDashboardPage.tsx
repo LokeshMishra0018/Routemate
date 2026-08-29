@@ -275,6 +275,7 @@ export const AdminDashboardPage: React.FC = () => {
       {/* Zone 2.2: Interactive Peak Online Telemetry Curve & Analytical Donut Charts */}
       <div className="space-y-6">
         <InteractiveTrendCurve
+          data1h={stats.trendCurves?.hours1 || []}
           data24h={stats.trendCurves?.hours24 || []}
           data7d={stats.trendCurves?.days7 || []}
           data30d={stats.trendCurves?.days30 || []}
