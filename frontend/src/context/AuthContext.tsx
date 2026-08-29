@@ -89,20 +89,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       const res = await apiClient.post('/auth/google', { idToken });
-      const { accessToken, user: loggedUser, profile: userProfile } = res.data.data;
-      setAuthToken(accessToken);
+      const data = res.data.data;
+      const accessToken = data.accessToken || data.tokens?.accessToken;
+      const loggedUser = data.user;
+      const userProfile = data.profile || data.user?.profile;
+
+      if (accessToken) {
+        setAuthToken(accessToken);
+      }
+
       const userObj = {
         id: loggedUser.id,
         email: loggedUser.email,
         role: loggedUser.role,
         status: loggedUser.status,
         emailVerified: loggedUser.emailVerified,
-        fullName: loggedUser.profile?.fullName,
-        avatarUrl: loggedUser.profile?.avatarUrl,
-        collegeId: loggedUser.profile?.collegeId,
-        collegeName: loggedUser.profile?.college?.name,
-        trustScore: loggedUser.profile?.trustScore,
-        verificationStatus: loggedUser.profile?.verificationStatus,
+        fullName: userProfile?.fullName || loggedUser.profile?.fullName,
+        avatarUrl: userProfile?.avatarUrl || loggedUser.profile?.avatarUrl,
+        collegeId: userProfile?.collegeId || loggedUser.profile?.collegeId,
+        collegeName: userProfile?.collegeName || loggedUser.profile?.collegeName || loggedUser.profile?.college?.name,
+        trustScore: userProfile?.trustScore || loggedUser.profile?.trustScore,
+        verificationStatus: userProfile?.verificationStatus || loggedUser.profile?.verificationStatus,
       };
       setUser(userObj as any);
       setProfile(userProfile || loggedUser.profile || null);
@@ -139,21 +146,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       const res = await apiClient.post('/auth/admin-provision/google', { adminPassword, idToken });
-      const { user: loggedUser, tokens, profile: userProfile } = res.data.data;
-      const accessToken = tokens?.accessToken || res.data.data.accessToken;
-      setAuthToken(accessToken);
+      const data = res.data.data;
+      const accessToken = data.accessToken || data.tokens?.accessToken;
+      const loggedUser = data.user;
+      const userProfile = data.profile || data.user?.profile;
+
+      if (accessToken) {
+        setAuthToken(accessToken);
+      }
+
       const userObj = {
         id: loggedUser.id,
         email: loggedUser.email,
         role: loggedUser.role,
         status: loggedUser.status,
         emailVerified: loggedUser.emailVerified,
-        fullName: loggedUser.profile?.fullName,
-        avatarUrl: loggedUser.profile?.avatarUrl,
-        collegeId: loggedUser.profile?.collegeId,
-        collegeName: loggedUser.profile?.collegeName || loggedUser.profile?.college?.name,
-        trustScore: loggedUser.profile?.trustScore,
-        verificationStatus: loggedUser.profile?.verificationStatus,
+        fullName: userProfile?.fullName || loggedUser.profile?.fullName,
+        avatarUrl: userProfile?.avatarUrl || loggedUser.profile?.avatarUrl,
+        collegeId: userProfile?.collegeId || loggedUser.profile?.collegeId,
+        collegeName: userProfile?.collegeName || loggedUser.profile?.collegeName || loggedUser.profile?.college?.name,
+        trustScore: userProfile?.trustScore || loggedUser.profile?.trustScore,
+        verificationStatus: userProfile?.verificationStatus || loggedUser.profile?.verificationStatus,
       };
       setUser(userObj as any);
       setProfile(userProfile || loggedUser.profile || null);

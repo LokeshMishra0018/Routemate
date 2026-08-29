@@ -668,11 +668,14 @@ export class AuthService {
     };
 
     return {
+      accessToken,
+      refreshToken: rawToken,
       tokens: {
         accessToken,
         refreshToken: rawToken,
       },
       user: userDto,
+      profile: userDto.profile,
     };
   }
 
@@ -985,11 +988,14 @@ export class AuthService {
     };
 
     return {
+      accessToken,
+      refreshToken: rawToken,
       tokens: {
         accessToken,
         refreshToken: rawToken,
       },
       user: userDto,
+      profile: userDto.profile,
     };
   }
 
