@@ -11,7 +11,7 @@ import {
   Edit3,
   BookOpen,
   Hash,
-  UserCheck,
+  BadgePercent,
   Phone,
   Sparkles,
 } from 'lucide-react';
@@ -69,6 +69,7 @@ export const ProfilePage: React.FC = () => {
   const [editFullName, setEditFullName] = useState('');
   const [editBranch, setEditBranch] = useState('Computer Science & Engineering (CSE)');
   const [editRollNumber, setEditRollNumber] = useState('');
+  const [editStudentId, setEditStudentId] = useState('');
   const [editAcademicYear, setEditAcademicYear] = useState<number>(3);
   const [editGender, setEditGender] = useState<'male' | 'female'>('male');
   const [editPhoneNumber, setEditPhoneNumber] = useState('');
@@ -91,6 +92,7 @@ export const ProfilePage: React.FC = () => {
       setEditFullName(profile.fullName || '');
       setEditBranch(profile.branch || 'Computer Science & Engineering (CSE)');
       setEditRollNumber(profile.rollNumber || '');
+      setEditStudentId(profile.studentId || '');
       setEditAcademicYear(profile.academicYear || 3);
       setEditGender((profile.gender as 'male' | 'female') || 'male');
       setEditPhoneNumber(profile.phoneNumber || '');
@@ -119,6 +121,7 @@ export const ProfilePage: React.FC = () => {
         fullName: editFullName.trim(),
         branch: editBranch.trim() || undefined,
         rollNumber: editRollNumber.trim() || undefined,
+        studentId: editStudentId.trim() || undefined,
         academicYear: Number(editAcademicYear),
         gender: editGender,
         phoneNumber: editPhoneNumber.trim() || undefined,
@@ -230,7 +233,16 @@ export const ProfilePage: React.FC = () => {
                     <span>•</span>
                     <span className="flex items-center gap-1 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700 text-amber-300 font-mono text-[11px] font-bold">
                       <Hash className="w-3 h-3 text-amber-400" />
-                      <span>{profile.rollNumber}</span>
+                      <span>Roll No: {profile.rollNumber}</span>
+                    </span>
+                  </>
+                )}
+                {profile.studentId && (
+                  <>
+                    <span>•</span>
+                    <span className="flex items-center gap-1 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-700/60 text-indigo-300 font-mono text-[11px] font-bold">
+                      <BadgePercent className="w-3 h-3 text-indigo-400" />
+                      <span>ID: {profile.studentId}</span>
                     </span>
                   </>
                 )}
@@ -271,15 +283,18 @@ export const ProfilePage: React.FC = () => {
         </div>
 
         {profile.bio ? (
-          <p className="text-xs text-slate-300 leading-relaxed bg-slate-900/70 p-4 rounded-xl border border-slate-800">
-            &ldquo;{profile.bio}&rdquo;
-          </p>
+          <div className="space-y-1 bg-slate-900/70 p-4 rounded-xl border border-slate-800">
+            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">About</span>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              &ldquo;{profile.bio}&rdquo;
+            </p>
+          </div>
         ) : isMyProfile ? (
           <div
             onClick={() => setIsEditModalOpen(true)}
             className="text-xs text-slate-500 italic bg-slate-900/40 p-3 rounded-xl border border-dashed border-slate-800 hover:border-indigo-500/40 cursor-pointer transition-colors text-center"
           >
-            + Add a short bio to let ride companions know your commute routine...
+            + Add an about bio to let ride companions know your commute routine...
           </div>
         ) : null}
 
@@ -401,7 +416,7 @@ export const ProfilePage: React.FC = () => {
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
         title="Edit Profile & Campus Identity"
-        description="Update your academic credentials, contact details, and commute bio."
+        description="Update your academic credentials, student roll number, and about bio."
         footer={
           <div className="flex gap-2">
             <Button variant="ghost" onClick={() => setIsEditModalOpen(false)}>
@@ -427,19 +442,26 @@ export const ProfilePage: React.FC = () => {
             required
           />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Select
-              label="Branch / Department"
-              value={editBranch}
-              onChange={(e) => setEditBranch(e.target.value)}
-              options={CAMPUS_BRANCHES}
-            />
+          <Select
+            label="Branch / Department"
+            value={editBranch}
+            onChange={(e) => setEditBranch(e.target.value)}
+            options={CAMPUS_BRANCHES}
+          />
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
-              label="College Roll No / Student ID"
+              label="College Roll No"
               placeholder="e.g. 2327CS1097"
               value={editRollNumber}
               onChange={(e) => setEditRollNumber(e.target.value)}
+            />
+
+            <Input
+              label="Student ID"
+              placeholder="e.g. STU-2023-1097"
+              value={editStudentId}
+              onChange={(e) => setEditStudentId(e.target.value)}
             />
           </div>
 
@@ -449,11 +471,10 @@ export const ProfilePage: React.FC = () => {
               value={editAcademicYear}
               onChange={(e) => setEditAcademicYear(Number(e.target.value))}
               options={[
-                { value: 1, label: '1st Year (Fresher)' },
-                { value: 2, label: '2nd Year (Sophomore)' },
-                { value: 3, label: '3rd Year (Junior)' },
-                { value: 4, label: '4th Year (Senior)' },
-                { value: 5, label: '5th Year (Integrated)' },
+                { value: 1, label: '1' },
+                { value: 2, label: '2' },
+                { value: 3, label: '3' },
+                { value: 4, label: '4' },
               ]}
             />
 
@@ -495,8 +516,8 @@ export const ProfilePage: React.FC = () => {
           />
 
           <Textarea
-            label="Commute Bio & Routine"
-            placeholder="Daily commuter from Vaishali Metro to KIET campus. Calm rides & coding music lover..."
+            label="About"
+            placeholder="Tell other commuters about yourself, your routine, and commute preferences..."
             value={editBio}
             onChange={(e) => setEditBio(e.target.value)}
             rows={3}

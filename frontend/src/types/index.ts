@@ -32,6 +32,7 @@ export interface UserProfile {
   collegeName?: string;
   branch?: string | null;
   rollNumber?: string | null;
+  studentId?: string | null;
   academicYear: number;
   gender: string;
   bio?: string | null;
@@ -58,6 +59,7 @@ export interface PublicProfile {
   collegeName?: string;
   branch?: string | null;
   rollNumber?: string | null;
+  studentId?: string | null;
   academicYear?: number;
   gender?: string;
   bio?: string | null;

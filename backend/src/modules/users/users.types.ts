@@ -46,6 +46,7 @@ export interface ProfileDocument {
   collegeId: string; // references colleges._id
   branch?: string | null;
   rollNumber?: string | null;
+  studentId?: string | null;
   academicYear: number | null;
   gender: string | null;
   bio: string | null;
@@ -85,6 +86,7 @@ export interface UserProfileDto {
     collegeDomain?: string;
     branch?: string | null;
     rollNumber?: string | null;
+    studentId?: string | null;
     academicYear: number | null;
     gender: string | null;
     bio: string | null;
@@ -107,6 +109,7 @@ export interface PublicProfileDto {
   collegeName?: string;
   branch?: string | null;
   rollNumber?: string | null;
+  studentId?: string | null;
   academicYear: number | null;
   gender: string | null;
   bio: string | null;

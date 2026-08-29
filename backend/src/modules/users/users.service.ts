@@ -45,6 +45,7 @@ export class UsersService {
         collegeDomain,
         branch: profile?.branch || null,
         rollNumber: profile?.rollNumber || null,
+        studentId: profile?.studentId || null,
         academicYear: profile?.academicYear || null,
         gender: profile?.gender || null,
         bio: profile?.bio || null,
@@ -71,6 +72,7 @@ export class UsersService {
       fullName?: string;
       branch?: string | null;
       rollNumber?: string | null;
+      studentId?: string | null;
       academicYear?: number | null;
       gender?: string | null;
       bio?: string | null;
@@ -87,6 +89,7 @@ export class UsersService {
     if (data.fullName !== undefined) updates.fullName = data.fullName.trim();
     if (data.branch !== undefined) updates.branch = data.branch?.trim() || null;
     if (data.rollNumber !== undefined) updates.rollNumber = data.rollNumber?.trim() || null;
+    if (data.studentId !== undefined) updates.studentId = data.studentId?.trim() || null;
     if (data.academicYear !== undefined) updates.academicYear = data.academicYear;
     if (data.gender !== undefined) updates.gender = data.gender;
     if (data.bio !== undefined) updates.bio = data.bio?.trim() ?? null;
@@ -134,6 +137,7 @@ export class UsersService {
       collegeName,
       branch: profile.branch || null,
       rollNumber: profile.rollNumber || null,
+      studentId: profile.studentId || null,
       academicYear: profile.academicYear,
       gender: profile.gender,
       bio: profile.bio,
