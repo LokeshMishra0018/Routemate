@@ -128,3 +128,8 @@
   box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.35);
 }
 
+/* Midnight Dark Filter for Standard OpenStreetMap Tiles (100% Watermark Free) */
+.leaflet-dark-tiles .leaflet-tile {
+  filter: brightness(0.6) invert(1) contrast(2.4) hue-rotate(205deg) saturate(0.4) brightness(0.78);
+}
+

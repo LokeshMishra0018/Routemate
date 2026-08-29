@@ -5,7 +5,9 @@ import {
   Marker,
   Popup,
   Polyline,
+  ZoomControl,
   useMap,
+  useMapEvents,
 } from 'react-leaflet';
 import L from 'leaflet';
 import {
@@ -36,24 +38,26 @@ export interface TripRouteMapProps {
   className?: string;
   showStatsHud?: boolean;
   onRouteCalculated?: (result: RouteCalculationResult) => void;
+  onMapClick?: (lat: number, lng: number) => void;
 }
 
 type TileTheme = 'dark' | 'light' | 'satellite';
 type MapEngine = 'google' | 'leaflet';
 
-const TILE_LAYERS: Record<TileTheme, { url: string; attribution: string; name: string; maxZoom?: number; maxNativeZoom?: number }> = {
+// 100% Watermark-Free Tile Endpoints
+const TILE_LAYERS: Record<TileTheme, { url: string; attribution: string; name: string; maxZoom: number; maxNativeZoom: number }> = {
   dark: {
     name: 'Midnight Dark',
-    url: 'https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
-    maxZoom: 20,
+    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
     maxNativeZoom: 19,
   },
   light: {
     name: 'Clean Daylight',
-    url: 'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
-    maxZoom: 20,
+    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
     maxNativeZoom: 19,
   },
   satellite: {
@@ -182,7 +186,8 @@ function loadGoogleMapsScript(apiKey: string): Promise<any> {
 }
 
 /**
- * Generates an ultra-crisp 3D Ball-Head Pushpin SVG (Spherical glossy head + chrome needle stem + grounded shadow)
+ * Generates an ultra-crisp 3D Ball-Head Pushpin SVG matching user reference:
+ * Spherical glossy head + chrome needle stem + grounded shadow
  */
 function getPushpinSvgString(type: MapWaypoint['type'], sequenceNumber?: number): string {
   let mainColor = '#10b981'; // Emerald Origin
@@ -194,7 +199,7 @@ function getPushpinSvgString(type: MapWaypoint['type'], sequenceNumber?: number)
     darkShade = '#0369a1';
     labelText = `${sequenceNumber || 1}`;
   } else if (type === 'destination') {
-    mainColor = '#ef4444'; // Glossy Crimson Red Destination (like user reference)
+    mainColor = '#ef4444'; // Glossy Crimson Red Destination
     darkShade = '#b91c1c';
     labelText = 'B';
   }
@@ -293,7 +298,6 @@ const SmartMapAutoFitController: React.FC<{
   useEffect(() => {
     if (waypoints.length === 0) return;
 
-    // Create a unique coordinate signature for origin + stops + destination
     const currentSignature = waypoints
       .filter((w) => typeof w.latitude === 'number' && !isNaN(w.latitude))
       .map((w) => `${w.latitude.toFixed(4)},${w.longitude.toFixed(4)}`)
@@ -339,12 +343,27 @@ const LeafletResizeHandler: React.FC<{ isVisible: boolean }> = ({ isVisible }) =
   return null;
 };
 
+/**
+ * Optional map click handler to pick coordinates by clicking directly on map
+ */
+const MapClickHandler: React.FC<{ onMapClick?: (lat: number, lng: number) => void }> = ({ onMapClick }) => {
+  useMapEvents({
+    click(e) {
+      if (onMapClick) {
+        onMapClick(e.latlng.lat, e.latlng.lng);
+      }
+    },
+  });
+  return null;
+};
+
 export const TripRouteMap: React.FC<TripRouteMapProps> = ({
   waypoints,
   interactive = true,
   className = '',
   showStatsHud = true,
   onRouteCalculated,
+  onMapClick,
 }) => {
   const googleApiKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GOOGLE_MAPS_API_KEY) || '';
   
@@ -362,6 +381,12 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
   const googlePolylineRef = useRef<any[]>([]);
   const googleUserMarkerRef = useRef<any>(null);
   const googleLastFittedSignature = useRef<string>('');
+  const lastCalculatedRouteSignature = useRef<string>('');
+  const onRouteCalculatedRef = useRef(onRouteCalculated);
+
+  useEffect(() => {
+    onRouteCalculatedRef.current = onRouteCalculated;
+  }, [onRouteCalculated]);
 
   // Initialize Google Maps API Loader if Key is Present
   useEffect(() => {
@@ -386,38 +411,52 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
     };
   }, [googleApiKey, engine]);
 
-  // Compute road polyline whenever waypoints change
+  // Compute road polyline with stable signature comparison to prevent infinite render loops
   useEffect(() => {
-    let isCancelled = false;
+    const validPoints = waypoints.filter(
+      (w) => typeof w.latitude === 'number' && !isNaN(w.latitude) && typeof w.longitude === 'number' && !isNaN(w.longitude)
+    );
 
-    async function fetchRoute() {
-      const validPoints = waypoints.filter(
-        (w) => typeof w.latitude === 'number' && !isNaN(w.latitude) && typeof w.longitude === 'number' && !isNaN(w.longitude)
-      );
+    const currentRouteSignature = validPoints
+      .map((w) => `${w.latitude.toFixed(4)},${w.longitude.toFixed(4)}`)
+      .join('|');
 
-      if (validPoints.length >= 2) {
-        setIsCalculatingRoute(true);
-        try {
-          const result = await computeRoadRoute(validPoints);
-          if (!isCancelled) {
-            setRouteResult(result);
-            if (onRouteCalculated) {
-              onRouteCalculated(result);
-            }
-          }
-        } finally {
-          if (!isCancelled) setIsCalculatingRoute(false);
-        }
-      } else {
-        setRouteResult(null);
-      }
+    if (validPoints.length < 2) {
+      setRouteResult(null);
+      lastCalculatedRouteSignature.current = '';
+      return;
     }
 
-    fetchRoute();
+    if (currentRouteSignature === lastCalculatedRouteSignature.current) {
+      return; // Already calculated for these exact coordinates
+    }
+
+    lastCalculatedRouteSignature.current = currentRouteSignature;
+    let isCancelled = false;
+    setIsCalculatingRoute(true);
+
+    computeRoadRoute(validPoints)
+      .then((result) => {
+        if (!isCancelled) {
+          setRouteResult(result);
+          if (onRouteCalculatedRef.current) {
+            onRouteCalculatedRef.current(result);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('Route calculation error:', err);
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setIsCalculatingRoute(false);
+        }
+      });
+
     return () => {
       isCancelled = true;
     };
-  }, [waypoints, onRouteCalculated]);
+  }, [waypoints]);
 
   // Render & Update Google Maps instance with Instant Theme Switching & Single-Shot Auto-Fit
   useEffect(() => {
@@ -438,6 +477,9 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
         zoom: 12,
         disableDefaultUI: !interactive,
         zoomControl: interactive,
+        zoomControlOptions: {
+          position: win.google.maps.ControlPosition.RIGHT_BOTTOM,
+        },
         mapTypeControl: false,
         streetViewControl: false,
         fullscreenControl: false,
@@ -445,6 +487,14 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
         styles: tileTheme === 'dark' ? GOOGLE_DARK_STYLE : [],
         mapTypeId: tileTheme === 'satellite' ? win.google.maps.MapTypeId.HYBRID : win.google.maps.MapTypeId.ROADMAP,
       });
+
+      if (onMapClick) {
+        googleMapInstance.current.addListener('click', (e: any) => {
+          if (e.latLng) {
+            onMapClick(e.latLng.lat(), e.latLng.lng());
+          }
+        });
+      }
     } else {
       const map = googleMapInstance.current;
       map.setOptions({
@@ -541,7 +591,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
         win.google.maps.event.trigger(map, 'resize');
       }, 60);
     }
-  }, [engine, isGoogleLoaded, waypoints, routeResult, tileTheme, interactive]);
+  }, [engine, isGoogleLoaded, waypoints, routeResult, tileTheme, interactive, onMapClick]);
 
   const handleLocateMe = () => {
     if (!navigator.geolocation) {
@@ -602,38 +652,38 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
   return (
     <div
       className={`relative rounded-2xl overflow-hidden border border-slate-800/80 shadow-2xl bg-slate-950 flex flex-col ${
-        className || 'h-96 w-full'
+        className || 'h-[440px] w-full'
       }`}
     >
       {/* Floating Map Controls Toolbar */}
-      <div className="absolute top-3 inset-x-3 z-[1000] flex items-center justify-between pointer-events-none">
+      <div className="absolute top-2.5 inset-x-2.5 z-[1000] flex items-center justify-between gap-2 pointer-events-none">
         {/* Top-Left: High-Contrast Map Provider Switcher Button */}
         {googleApiKey ? (
           <button
             type="button"
             onClick={() => setEngine(engine === 'google' ? 'leaflet' : 'google')}
-            className={`pointer-events-auto flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold shadow-2xl backdrop-blur-md transition-all active:scale-95 ${
+            className={`pointer-events-auto flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[11px] font-bold shadow-2xl backdrop-blur-md transition-all active:scale-95 ${
               engine === 'google'
                 ? 'bg-slate-900/95 text-emerald-400 border-emerald-500/50 hover:bg-slate-800'
                 : 'bg-slate-900/95 text-sky-400 border-sky-500/50 hover:bg-slate-800'
             }`}
             title="Switch Map Provider"
           >
-            <Globe className="w-4 h-4" />
-            <span>{engine === 'google' ? 'Google Maps' : 'OpenStreetMap'}</span>
+            <Globe className="w-3.5 h-3.5" />
+            <span className="truncate">{engine === 'google' ? 'Google Maps' : 'OpenStreetMap'}</span>
           </button>
         ) : (
           <div />
         )}
 
-        {/* Top-Right: Locate Me & Theme Switcher */}
-        <div className="flex items-center gap-2">
+        {/* Top-Right: Locate Me & Compact Theme Switcher */}
+        <div className="flex items-center gap-1.5">
           {/* Locate Me GPS Button */}
           <button
             type="button"
             onClick={handleLocateMe}
             disabled={isLocating}
-            className={`pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold shadow-2xl backdrop-blur-md transition-all active:scale-95 ${
+            className={`pointer-events-auto flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-[11px] font-semibold shadow-2xl backdrop-blur-md transition-all active:scale-95 ${
               userLocation
                 ? 'bg-slate-900/95 text-sky-300 border-sky-500/50 hover:bg-slate-800'
                 : 'bg-slate-900/95 text-slate-200 border-slate-700/80 hover:bg-slate-800'
@@ -641,55 +691,55 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
             title="Center map on my live GPS Location"
           >
             {isLocating ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-400" />
+              <Loader2 className="w-3 h-3 animate-spin text-sky-400" />
             ) : (
-              <Crosshair className="w-3.5 h-3.5 text-sky-400" />
+              <Crosshair className="w-3 h-3 text-sky-400" />
             )}
-            <span className="hidden sm:inline">Locate Me</span>
+            <span className="hidden sm:inline">Locate</span>
           </button>
 
           {/* Clean Theme Segmented Control */}
-          <div className="pointer-events-auto flex items-center p-1 rounded-xl bg-slate-900/95 border border-slate-700/80 shadow-2xl backdrop-blur-md text-xs gap-0.5">
+          <div className="pointer-events-auto flex items-center p-0.5 rounded-xl bg-slate-900/95 border border-slate-700/80 shadow-2xl backdrop-blur-md text-[11px] gap-0.5">
             <button
               type="button"
               onClick={() => setTileTheme('dark')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition-all ${
+              className={`flex items-center gap-1 px-2 py-1 rounded-lg font-medium transition-all ${
                 tileTheme === 'dark'
-                  ? 'bg-indigo-600 text-white shadow-md'
+                  ? 'bg-indigo-600 text-white shadow'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
               }`}
               title="Dark Theme"
             >
               <Moon className="w-3 h-3" />
-              <span>Dark</span>
+              <span className="hidden xs:inline">Dark</span>
             </button>
 
             <button
               type="button"
               onClick={() => setTileTheme('light')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition-all ${
+              className={`flex items-center gap-1 px-2 py-1 rounded-lg font-medium transition-all ${
                 tileTheme === 'light'
-                  ? 'bg-indigo-600 text-white shadow-md'
+                  ? 'bg-indigo-600 text-white shadow'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
               }`}
               title="Clean Daylight Theme"
             >
               <Sun className="w-3 h-3" />
-              <span>Light</span>
+              <span className="hidden xs:inline">Light</span>
             </button>
 
             <button
               type="button"
               onClick={() => setTileTheme('satellite')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition-all ${
+              className={`flex items-center gap-1 px-2 py-1 rounded-lg font-medium transition-all ${
                 tileTheme === 'satellite'
-                  ? 'bg-indigo-600 text-white shadow-md'
+                  ? 'bg-indigo-600 text-white shadow'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
               }`}
               title="Satellite Imagery"
             >
               <Layers className="w-3 h-3" />
-              <span>Sat</span>
+              <span className="hidden xs:inline">Sat</span>
             </button>
           </div>
         </div>
@@ -697,28 +747,28 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
 
       {/* Floating Route Statistics HUD */}
       {showStatsHud && routeResult && routeResult.distanceKm > 0 && (
-        <div className="pointer-events-none absolute bottom-3 left-3 right-3 sm:right-auto z-[1000] p-3 rounded-xl bg-slate-900/95 border border-slate-700/80 shadow-2xl backdrop-blur-md flex flex-wrap items-center gap-4 text-xs text-slate-200">
+        <div className="pointer-events-none absolute bottom-2.5 left-2.5 right-2.5 sm:right-auto z-[1000] p-2.5 rounded-xl bg-slate-900/95 border border-slate-700/80 shadow-2xl backdrop-blur-md flex flex-wrap items-center gap-3 text-xs text-slate-200">
           <div className="flex items-center gap-1.5 font-medium text-emerald-400">
-            <Navigation className="h-4 w-4 shrink-0" />
+            <Navigation className="h-3.5 w-3.5 shrink-0" />
             <span className="text-sm font-semibold text-slate-100">{routeResult.distanceKm} km</span>
             <span className="text-slate-400 text-[10px]">Road Distance</span>
           </div>
 
-          <div className="h-4 w-px bg-slate-700/60 hidden sm:block" />
+          <div className="h-3.5 w-px bg-slate-700/60 hidden sm:block" />
 
           <div className="flex items-center gap-1.5 font-medium text-sky-400">
-            <Clock className="h-4 w-4 shrink-0" />
+            <Clock className="h-3.5 w-3.5 shrink-0" />
             <span className="text-sm font-semibold text-slate-100">{routeResult.formattedDuration}</span>
             <span className="text-slate-400 text-[10px]">Est. Travel Time</span>
           </div>
 
           {waypoints.length > 2 && (
             <>
-              <div className="h-4 w-px bg-slate-700/60 hidden sm:block" />
+              <div className="h-3.5 w-px bg-slate-700/60 hidden sm:block" />
               <div className="flex items-center gap-1.5 text-indigo-400">
-                <MapPin className="h-4 w-4 shrink-0" />
+                <MapPin className="h-3.5 w-3.5 shrink-0" />
                 <span className="font-semibold text-slate-100">{waypoints.length - 2}</span>
-                <span className="text-slate-400 text-[10px]">Intermediate Stops</span>
+                <span className="text-slate-400 text-[10px]">Stops</span>
               </div>
             </>
           )}
@@ -733,12 +783,12 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
       {googleApiKey && (
         <div
           ref={googleMapRef}
-          className={`w-full h-full min-h-[280px] ${engine === 'google' ? 'block' : 'hidden'}`}
+          className={`w-full h-full min-h-[320px] ${engine === 'google' ? 'block' : 'hidden'}`}
         />
       )}
 
       {/* Render Fallback Leaflet Map Engine */}
-      <div className={`w-full h-full min-h-[280px] ${engine === 'leaflet' || !googleApiKey ? 'block' : 'hidden'}`}>
+      <div className={`w-full h-full min-h-[320px] ${engine === 'leaflet' || !googleApiKey ? 'block' : 'hidden'}`}>
         <MapContainer
           center={defaultCenter}
           zoom={12}
@@ -746,16 +796,19 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
           dragging={interactive}
           touchZoom={interactive}
           doubleClickZoom={interactive}
-          zoomControl={interactive}
-          className="w-full h-full min-h-[280px]"
+          zoomControl={false}
+          className={`w-full h-full min-h-[320px] ${tileTheme === 'dark' ? 'leaflet-dark-tiles' : ''}`}
         >
           <TileLayer
             key={`${tileTheme}-${activeTile.url}`}
             url={activeTile.url}
             attribution={activeTile.attribution}
-            maxZoom={activeTile.maxZoom || 19}
-            maxNativeZoom={activeTile.maxNativeZoom || 19}
+            maxZoom={activeTile.maxZoom}
+            maxNativeZoom={activeTile.maxNativeZoom}
           />
+
+          {/* Place Leaflet Zoom Control at Bottom Right so it never overlaps top toolbar */}
+          {interactive && <ZoomControl position="bottomright" />}
 
           <LeafletResizeHandler isVisible={engine === 'leaflet' || !googleApiKey} />
 
@@ -763,6 +816,8 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
             waypoints={waypoints}
             routeCoords={routeResult?.coordinates || []}
           />
+
+          <MapClickHandler onMapClick={onMapClick} />
 
           {/* User Live Location Beacon */}
           {userLocation && (

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -68,6 +68,20 @@ export const TripCreatePage: React.FC = () => {
   // Route metrics from live calculation
   const [routeStats, setRouteStats] = useState<RouteCalculationResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  const handleRouteCalculated = useCallback((stats: RouteCalculationResult) => {
+    setRouteStats(stats);
+  }, []);
+
+  const handleMapClick = useCallback((lat: number, lng: number) => {
+    if (!sourceCoords) {
+      setSourceName(`Custom Origin (${lat.toFixed(3)}, ${lng.toFixed(3)})`);
+      setSourceCoords([lng, lat]);
+    } else if (!destCoords) {
+      setDestName(`Selected Destination (${lat.toFixed(3)}, ${lng.toFixed(3)})`);
+      setDestCoords([lng, lat]);
+    }
+  }, [sourceCoords, destCoords]);
 
   // Build waypoints array for live map rendering
   const mapWaypoints: MapWaypoint[] = useMemo(() => {
@@ -571,7 +585,8 @@ export const TripCreatePage: React.FC = () => {
                 waypoints={mapWaypoints}
                 className="h-[440px] w-full rounded-xl"
                 showStatsHud={true}
-                onRouteCalculated={(stats) => setRouteStats(stats)}
+                onRouteCalculated={handleRouteCalculated}
+                onMapClick={handleMapClick}
               />
 
               {/* Eco Footprint & Verified Safety Badge */}
