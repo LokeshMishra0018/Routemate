@@ -32,9 +32,47 @@ export interface PresenceStore {
  */
 export class MemoryPresenceStore implements PresenceStore {
   private presences: Map<string, LivePresence> = new Map();
+  private todayPeak = 0;
+  private todayPeakTime = 'Live Now';
+  private allTimePeak = 0;
+  private allTimePeakDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  private currentDay = new Date().toDateString();
+  private hourlyMax: number[] = new Array(24).fill(0);
+
+  private checkDayReset(): void {
+    const today = new Date().toDateString();
+    if (this.currentDay !== today) {
+      this.currentDay = today;
+      this.todayPeak = this.presences.size;
+      this.todayPeakTime = 'Live Now';
+      this.hourlyMax = new Array(24).fill(0);
+    }
+  }
+
+  private updatePeakMetrics(): void {
+    this.checkDayReset();
+    const count = this.presences.size;
+    const now = new Date();
+    const hour = now.getHours();
+
+    if (count > this.hourlyMax[hour]) {
+      this.hourlyMax[hour] = count;
+    }
+
+    if (count > this.todayPeak) {
+      this.todayPeak = count;
+      this.todayPeakTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} (Peak)`;
+    }
+
+    if (count > this.allTimePeak) {
+      this.allTimePeak = count;
+      this.allTimePeakDate = now.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+  }
 
   setPresence(socketId: string, presence: LivePresence): void {
     this.presences.set(socketId, presence);
+    this.updatePeakMetrics();
   }
 
   updatePresence(socketId: string, updates: Partial<LivePresence>): void {
@@ -46,6 +84,7 @@ export class MemoryPresenceStore implements PresenceStore {
         lastPingAt: updates.lastPingAt || new Date().toISOString(),
       });
     }
+    this.updatePeakMetrics();
   }
 
   removePresence(socketId: string): void {
@@ -71,8 +110,23 @@ export class MemoryPresenceStore implements PresenceStore {
     return this.getAllPresence().filter((p) => p.userId === userId);
   }
 
+  getPeakStats(): { todayPeak: number; todayPeakTime: string; allTimePeak: number; allTimePeakDate: string; hourlyMax: number[] } {
+    this.checkDayReset();
+    const current = this.presences.size;
+    return {
+      todayPeak: Math.max(current, this.todayPeak),
+      todayPeakTime: this.todayPeakTime,
+      allTimePeak: Math.max(current, this.todayPeak, this.allTimePeak),
+      allTimePeakDate: this.allTimePeakDate,
+      hourlyMax: [...this.hourlyMax],
+    };
+  }
+
   clear(): void {
     this.presences.clear();
+    this.todayPeak = 0;
+    this.allTimePeak = 0;
+    this.hourlyMax = new Array(24).fill(0);
   }
 }
 

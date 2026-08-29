@@ -313,13 +313,10 @@ export const AdminDashboardPage: React.FC = () => {
 
           <DonutChart
             title="Authentication Channels Share"
-            subtitle="1-Click Google OAuth vs Institutional Email + OTP sign-ins"
+            subtitle="Registered accounts by primary authentication method"
             icon={<Globe className="w-4 h-4 text-rose-400" />}
-            centerLabel="Total Logins"
-            centerValue={
-              (stats.breakdown?.authMethods.google || 0) +
-              (stats.breakdown?.authMethods.emailPassword || 0)
-            }
+            centerLabel="Registered"
+            centerValue={stats.users.total}
             segments={[
               {
                 label: 'Google OAuth',

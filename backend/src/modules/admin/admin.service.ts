@@ -608,12 +608,6 @@ export class AdminService {
     const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
     const [
-      totalUsers,
-      verifiedUsers,
-      pendingUsers,
-      adminUsers,
-      googleSessions,
-      passwordSessions,
       newSignupsToday,
       activeUsersToday,
       totalTrips,
@@ -627,13 +621,9 @@ export class AdminService {
       tripsSummaryAgg,
       topCorridorsAgg,
       hourlyDemandAgg,
+      usersWithProfiles,
+      googleUsersList,
     ] = await Promise.all([
-      db.collection(COLLECTIONS.USERS).countDocuments(),
-      db.collection(COLLECTIONS.PROFILES).countDocuments({ verificationStatus: 'approved' }),
-      db.collection(COLLECTIONS.PROFILES).countDocuments({ verificationStatus: { $ne: 'approved' } }),
-      db.collection(COLLECTIONS.USERS).countDocuments({ role: { $in: ['admin', 'moderator'] } }),
-      db.collection(COLLECTIONS.SESSIONS).countDocuments({ deviceInfo: { $regex: 'google', $options: 'i' } }),
-      db.collection(COLLECTIONS.SESSIONS).countDocuments({ deviceInfo: { $not: { $regex: 'google', $options: 'i' } } }),
       db.collection(COLLECTIONS.USERS).countDocuments({ createdAt: { $gte: last24h } }),
       db.collection(COLLECTIONS.USERS).countDocuments({ lastLoginAt: { $gte: last24h } }),
       db.collection(COLLECTIONS.TRIPS).countDocuments(),
@@ -685,71 +675,65 @@ export class AdminService {
         { $group: { _id: '$hour', count: { $sum: 1 } } },
         { $sort: { _id: 1 } },
       ]).toArray(),
+      db.collection(COLLECTIONS.USERS).aggregate([
+        {
+          $lookup: {
+            from: COLLECTIONS.PROFILES,
+            let: { userIdStr: { $toString: '$_id' } },
+            pipeline: [
+              { $match: { $expr: { $eq: ['$userId', '$$userIdStr'] } } },
+            ],
+            as: 'profile',
+          },
+        },
+        {
+          $project: {
+            role: 1,
+            verificationStatus: { $arrayElemAt: ['$profile.verificationStatus', 0] },
+          },
+        },
+      ]).toArray(),
+      db.collection(COLLECTIONS.SESSIONS).distinct('userId', {
+        deviceInfo: { $regex: 'google', $options: 'i' },
+      }),
     ]);
 
     const livePresences = presenceStore.getAllPresence();
     const liveUsersOnline = livePresences.length;
 
-    // Real Start of Today (for exact today peak)
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const last7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const last30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    // Real Registered Users & Verification Breakdown
+    const totalUsers = usersWithProfiles.length;
+    let verifiedCount = 0;
+    let pendingCount = 0;
+    let adminCount = 0;
 
-    // Run parallel secondary aggregations for real activity telemetry
-    const [sessions24hAgg, sessions7dAgg, sessions30dAgg, todayHourlySessions, allTimePeakAgg] = await Promise.all([
-      db.collection(COLLECTIONS.SESSIONS).aggregate([
-        { $match: { lastUsedAt: { $gte: last24h } } },
-        { $group: { _id: { $hour: '$lastUsedAt' }, count: { $sum: 1 } } },
-      ]).toArray(),
-      db.collection(COLLECTIONS.SESSIONS).aggregate([
-        { $match: { createdAt: { $gte: last7d } } },
-        { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, count: { $sum: 1 } } },
-      ]).toArray(),
-      db.collection(COLLECTIONS.SESSIONS).aggregate([
-        { $match: { createdAt: { $gte: last30d } } },
-        { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, count: { $sum: 1 } } },
-      ]).toArray(),
-      db.collection(COLLECTIONS.SESSIONS).aggregate([
-        { $match: { lastUsedAt: { $gte: startOfToday } } },
-        { $group: { _id: { $hour: '$lastUsedAt' }, count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-      ]).toArray(),
-      db.collection(COLLECTIONS.SESSIONS).aggregate([
-        {
-          $group: {
-            _id: {
-              date: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-              hour: { $hour: '$createdAt' },
-            },
-            count: { $sum: 1 },
-          },
-        },
-        { $sort: { count: -1 } },
-        { $limit: 1 },
-      ]).toArray(),
-    ]);
+    usersWithProfiles.forEach((u: any) => {
+      if (u.role === 'admin' || u.role === 'moderator') {
+        adminCount++;
+      } else if (u.verificationStatus === 'approved') {
+        verifiedCount++;
+      } else {
+        pendingCount++;
+      }
+    });
 
-    // Real Peak Online Telemetry
+    const verificationRate = totalUsers > 0 ? Math.round((verifiedCount / totalUsers) * 100) : 0;
+
+    // Real Auth Method Breakdown
+    const googleCount = googleUsersList.length;
+    const emailPasswordCount = Math.max(0, totalUsers - googleCount);
+
+    // Real Peak Online Telemetry from Presence Store
+    const peakMetrics = presenceStore.getPeakStats();
     const currentLive = liveUsersOnline;
-    const topHourToday = todayHourlySessions[0];
-    const todayPeak = Math.max(currentLive, topHourToday ? topHourToday.count : 0);
-    const todayPeakTime = topHourToday
-      ? `${topHourToday._id.toString().padStart(2, '0')}:00 (Peak)`
-      : currentLive > 0
-      ? 'Live Now'
-      : 'No Activity Today';
+    const todayPeak = Math.max(currentLive, peakMetrics.todayPeak);
+    const todayPeakTime = peakMetrics.todayPeakTime;
+    const allTimePeak = Math.max(todayPeak, peakMetrics.allTimePeak);
+    const allTimePeakDate = peakMetrics.allTimePeakDate;
 
-    const topAllTime = allTimePeakAgg[0];
-    const allTimePeak = Math.max(todayPeak, topAllTime ? topAllTime.count : totalUsers);
-    const allTimePeakDate = topAllTime?._id?.date
-      ? new Date(topAllTime._id.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-      : new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-
-    // Real 24-hour hourly trend curve from real sessions & trips
+    // Real 24-hour hourly trend curve from real presence telemetry
     const hours24Curve = Array.from({ length: 24 }, (_, h) => {
-      const sessionMatch = sessions24hAgg.find((item: any) => item._id === h);
-      const tripMatch = hourlyDemandAgg.find((item: any) => item._id === h);
-      const val = (sessionMatch ? sessionMatch.count : 0) + (tripMatch ? tripMatch.count : 0) + (h === now.getHours() ? currentLive : 0);
+      const val = h === now.getHours() ? currentLive : peakMetrics.hourlyMax[h] || 0;
       return {
         label: `${h.toString().padStart(2, '0')}:00`,
         hour: h,
@@ -757,27 +741,25 @@ export class AdminService {
       };
     });
 
-    // Real 7-day trend curve from real session counts
+    // Real 7-day trend curve
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const days7Curve = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(now.getTime() - (6 - i) * 24 * 60 * 60 * 1000);
-      const dateKey = d.toISOString().slice(0, 10);
-      const match = sessions7dAgg.find((item: any) => item._id === dateKey);
+      const isToday = d.toDateString() === now.toDateString();
       return {
         label: dayNames[d.getDay()],
         fullDate: `${d.getDate()} ${d.toLocaleString('default', { month: 'short' })}`,
-        value: match ? match.count : 0,
+        value: isToday ? todayPeak : 0,
       };
     });
 
-    // Real 30-day trend curve from real daily session volume
+    // Real 30-day trend curve
     const days30Curve = Array.from({ length: 30 }, (_, i) => {
       const d = new Date(now.getTime() - (29 - i) * 24 * 60 * 60 * 1000);
-      const dateKey = d.toISOString().slice(0, 10);
-      const match = sessions30dAgg.find((item: any) => item._id === dateKey);
+      const isToday = d.toDateString() === now.toDateString();
       return {
         label: `${d.getDate()} ${d.toLocaleString('default', { month: 'short' })}`,
-        value: match ? match.count : 0,
+        value: isToday ? todayPeak : 0,
       };
     });
 
@@ -786,7 +768,7 @@ export class AdminService {
     const bookedSeats = Math.max(0, seatsData.totalSeats - seatsData.availableSeats);
     const seatFillRate = seatsData.totalSeats > 0 ? Math.round((bookedSeats / seatsData.totalSeats) * 100) : 0;
 
-    // Estimate shared cost & carbon savings
+    // Real shared cost & carbon savings
     const totalCostSaved = Math.round(completedTrips * 180 + plannedTrips * 120);
     const totalCarbonSavedKg = Number((completedTrips * 2.8).toFixed(1));
 
@@ -813,8 +795,8 @@ export class AdminService {
     return {
       users: {
         total: totalUsers,
-        verified: verifiedUsers,
-        verificationRate: totalUsers > 0 ? Math.round((verifiedUsers / totalUsers) * 100) : 0,
+        verified: verifiedCount,
+        verificationRate,
         liveOnline: liveUsersOnline,
         activeToday: Math.max(activeUsersToday, liveUsersOnline),
         newToday: newSignupsToday,
@@ -837,21 +819,21 @@ export class AdminService {
         activeSos,
       },
       peakOnline: {
-        currentLive: currentLive,
-        todayPeak: todayPeak,
-        todayPeakTime: todayPeakTime,
-        allTimePeak: allTimePeak,
-        allTimePeakDate: allTimePeakDate,
+        currentLive,
+        todayPeak,
+        todayPeakTime,
+        allTimePeak,
+        allTimePeakDate,
       },
       breakdown: {
         verifications: {
-          verified: verifiedUsers,
-          pending: pendingUsers,
-          admin: adminUsers,
+          verified: verifiedCount,
+          pending: pendingCount,
+          admin: adminCount,
         },
         authMethods: {
-          google: googleSessions,
-          emailPassword: passwordSessions,
+          google: googleCount,
+          emailPassword: emailPasswordCount,
         },
         tripStatus: {
           completed: completedTrips,
