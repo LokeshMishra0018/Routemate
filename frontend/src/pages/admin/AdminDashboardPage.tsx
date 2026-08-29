@@ -415,17 +415,17 @@ export const AdminDashboardPage: React.FC = () => {
                 {displayUsers.map((commuter) => (
                   <div
                     key={commuter.sessionId}
-                    className="p-4 rounded-xl bg-gradient-to-r from-indigo-950/60 via-slate-900 to-indigo-950/40 border border-indigo-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all hover:border-indigo-500/60"
+                    className="p-4 rounded-xl bg-gradient-to-r from-indigo-950/60 via-slate-900 to-indigo-950/40 border border-indigo-500/30 flex flex-col xl:flex-row xl:items-center justify-between gap-4 transition-all hover:border-indigo-500/60"
                   >
-                    <div className="flex items-center gap-3.5">
-                      <div className="relative">
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="relative shrink-0">
                         <img
                           src={
                             commuter.avatarUrl ||
                             `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(commuter.email)}`
                           }
                           alt={commuter.fullName}
-                          className="w-12 h-12 rounded-xl object-cover border border-slate-700 bg-slate-950"
+                          className="w-12 h-12 rounded-xl object-cover border border-slate-700 bg-slate-950 shrink-0"
                         />
                         <span
                           className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full ring-2 ring-slate-950 ${
@@ -437,48 +437,50 @@ export const AdminDashboardPage: React.FC = () => {
                         />
                       </div>
 
-                      <div>
+                      <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-bold text-white">{commuter.fullName}</span>
+                          <span className="text-sm font-bold text-white whitespace-nowrap">{commuter.fullName}</span>
                           {commuter.role === 'admin' ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold whitespace-nowrap">
                               <Crown className="w-3 h-3" /> Admin
                             </span>
                           ) : commuter.verificationStatus === 'approved' ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-bold">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-bold whitespace-nowrap">
                               <ShieldCheck className="w-3 h-3 text-sky-400" /> Verified Student (Blue Tick)
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold whitespace-nowrap">
                               🟡 ID Pending
                             </span>
                           )}
                         </div>
-                        <div className="text-xs text-slate-400 mt-0.5 font-mono">{commuter.email}</div>
+                        <div className="text-xs text-slate-400 mt-1 font-mono truncate max-w-[280px]">
+                          {commuter.email}
+                        </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-4 text-xs text-slate-300 flex-wrap md:justify-end">
-                      <div className="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 px-3 py-1.5 rounded-lg">
+                    <div className="flex items-center gap-3 text-xs text-slate-300 flex-wrap xl:justify-end shrink-0">
+                      <div className="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 px-3 py-1.5 rounded-lg shrink-0">
                         {commuter.authMethod === 'google' ? (
                           <>
                             <Globe className="w-3.5 h-3.5 text-rose-400" />
-                            <span className="font-semibold text-rose-300">Google OAuth</span>
+                            <span className="font-semibold text-rose-300 whitespace-nowrap">Google OAuth</span>
                           </>
                         ) : (
                           <>
                             <Lock className="w-3.5 h-3.5 text-indigo-400" />
-                            <span className="font-semibold text-indigo-300">Email + Password</span>
+                            <span className="font-semibold text-indigo-300 whitespace-nowrap">Email + Password</span>
                           </>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 px-3 py-1.5 rounded-lg">
-                        <Laptop className="w-3.5 h-3.5 text-slate-400" />
-                        <span className="text-slate-300 truncate max-w-[160px]">{commuter.deviceInfo}</span>
+                      <div className="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 px-3 py-1.5 rounded-lg shrink-0">
+                        <Laptop className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="text-slate-300 truncate max-w-[180px]">{commuter.deviceInfo}</span>
                       </div>
 
-                      <div className="text-right">
+                      <div className="text-right shrink-0">
                         {commuter.isOnline ? (
                           <div className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 justify-end">
                             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
@@ -504,15 +506,15 @@ export const AdminDashboardPage: React.FC = () => {
 
         {/* Recent Logins Table */}
         <div className="overflow-x-auto rounded-xl border border-slate-800">
-          <table className="w-full text-left text-xs text-slate-300">
+          <table className="w-full min-w-[880px] text-left text-xs text-slate-300">
             <thead className="bg-slate-950/90 text-slate-400 uppercase tracking-wider text-[10px] font-semibold border-b border-slate-800">
               <tr>
-                <th className="py-3 px-4">Commuter</th>
-                <th className="py-3 px-4">Verification Status</th>
-                <th className="py-3 px-4">Auth Method</th>
-                <th className="py-3 px-4">Device &amp; Telemetry</th>
-                <th className="py-3 px-4">Logged In</th>
-                <th className="py-3 px-4 text-right">Trust Score</th>
+                <th className="py-3 px-4 min-w-[220px]">Commuter</th>
+                <th className="py-3 px-4 min-w-[140px]">Verification Status</th>
+                <th className="py-3 px-4 min-w-[140px]">Auth Method</th>
+                <th className="py-3 px-4 min-w-[180px]">Device &amp; Telemetry</th>
+                <th className="py-3 px-4 min-w-[110px]">Logged In</th>
+                <th className="py-3 px-4 min-w-[90px] text-right">Trust Score</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 bg-slate-950/40">
@@ -531,36 +533,38 @@ export const AdminDashboardPage: React.FC = () => {
               ) : (
                 recentLogins.map((item, idx) => (
                   <tr key={item.sessionId || idx} className="hover:bg-slate-900/60 transition-colors">
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2.5">
-                        <div className="relative">
+                    <td className="py-3 px-4 min-w-[220px]">
+                      <div className="flex items-center gap-3">
+                        <div className="relative shrink-0">
                           <img
                             src={item.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(item.email)}`}
                             alt={item.fullName}
-                            className="w-7 h-7 rounded-lg object-cover bg-slate-900 border border-slate-700"
+                            className="w-8 h-8 rounded-lg object-cover bg-slate-900 border border-slate-700 shrink-0"
                           />
                           {item.isOnline && (
                             <span
-                              className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 ring-1 ring-slate-950 animate-pulse"
+                              className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-slate-950 animate-pulse"
                               title="Online Now"
                             />
                           )}
                         </div>
-                        <div>
-                          <div className="font-bold text-slate-200 flex items-center gap-1.5">
+                        <div className="min-w-0">
+                          <div className="font-bold text-slate-200 flex items-center gap-1.5 whitespace-nowrap">
                             <span>{item.fullName}</span>
                             {item.isOnline && (
-                              <span className="text-[9px] px-1 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                              <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
                                 Live
                               </span>
                             )}
                           </div>
-                          <div className="text-[11px] text-slate-400 font-mono">{item.email}</div>
+                          <div className="text-[11px] text-slate-400 font-mono whitespace-nowrap truncate max-w-[220px]">
+                            {item.email}
+                          </div>
                         </div>
                       </div>
                     </td>
 
-                    <td className="py-3 px-4">
+                    <td className="py-3 px-4 whitespace-nowrap">
                       {item.role === 'admin' ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
                           <Crown className="w-3 h-3" /> Admin
@@ -576,7 +580,7 @@ export const AdminDashboardPage: React.FC = () => {
                       )}
                     </td>
 
-                    <td className="py-3 px-4">
+                    <td className="py-3 px-4 whitespace-nowrap">
                       {item.authMethod === 'google' ? (
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-300 border border-rose-500/20 text-[11px] font-semibold">
                           <Globe className="w-3 h-3 text-rose-400" /> Google OAuth
@@ -589,20 +593,20 @@ export const AdminDashboardPage: React.FC = () => {
                     </td>
 
                     <td className="py-3 px-4">
-                      <div className="flex items-center gap-1.5 text-slate-300 text-[11px]">
+                      <div className="flex items-center gap-1.5 text-slate-300 text-[11px] whitespace-nowrap">
                         <Laptop className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                        <span className="truncate max-w-[180px]">{item.deviceInfo}</span>
+                        <span className="truncate max-w-[200px]">{item.deviceInfo}</span>
                       </div>
                     </td>
 
-                    <td className="py-3 px-4">
+                    <td className="py-3 px-4 whitespace-nowrap">
                       <div className="font-semibold text-slate-200">{formatTimeAgo(item.loginAt)}</div>
                       <div className="text-[10px] text-slate-500 font-mono">
                         {new Date(item.loginAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </div>
                     </td>
 
-                    <td className="py-3 px-4 text-right">
+                    <td className="py-3 px-4 text-right whitespace-nowrap">
                       <span className="font-mono font-bold text-amber-300 bg-amber-950/60 border border-amber-500/30 px-2 py-0.5 rounded text-[11px]">
                         {item.trustScore} pts
                       </span>
