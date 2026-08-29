@@ -12,12 +12,14 @@ import {
   Maximize2,
   Minimize2,
   Navigation,
-  Sparkles,
   MapPin,
   Clock,
   Globe,
   Crosshair,
   Loader2,
+  Moon,
+  Sun,
+  Layers,
 } from 'lucide-react';
 import { computeRoadRoute, RouteCalculationResult } from '../../services/routing.service';
 
@@ -44,16 +46,16 @@ type MapEngine = 'google' | 'leaflet';
 const TILE_LAYERS: Record<TileTheme, { url: string; attribution: string; name: string; maxZoom?: number; maxNativeZoom?: number }> = {
   dark: {
     name: 'Midnight Dark',
-    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    maxZoom: 19,
+    url: 'https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
+    maxZoom: 20,
     maxNativeZoom: 19,
   },
   light: {
     name: 'Clean Daylight',
-    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    maxZoom: 19,
+    url: 'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
+    maxZoom: 20,
     maxNativeZoom: 19,
   },
   satellite: {
@@ -182,13 +184,13 @@ function loadGoogleMapsScript(apiKey: string): Promise<any> {
 }
 
 /**
- * Creates custom styled HTML markers for Leaflet with pulsating animations
+ * Creates rock-solid, non-blinking custom styled HTML markers for Leaflet
  */
 function createCustomIcon(type: MapWaypoint['type'], sequenceNumber?: number): L.DivIcon {
   let bgColor = 'bg-emerald-500';
-  let pulseClass = 'marker-pulse-emerald';
+  let badgeBorder = 'border-emerald-300/60';
   let iconSvg = `
-    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
       <polyline points="9 22 9 12 15 12 15 22"/>
     </svg>`;
@@ -196,14 +198,14 @@ function createCustomIcon(type: MapWaypoint['type'], sequenceNumber?: number): L
 
   if (type === 'stop') {
     bgColor = 'bg-sky-500';
-    pulseClass = 'marker-pulse-blue';
-    iconSvg = `<span class="text-xs font-bold text-white font-mono">${sequenceNumber || 1}</span>`;
+    badgeBorder = 'border-sky-300/60';
+    iconSvg = `<span class="text-xs font-bold text-white font-mono leading-none">${sequenceNumber || 1}</span>`;
     label = `Stop ${sequenceNumber || 1}`;
   } else if (type === 'destination') {
     bgColor = 'bg-amber-500';
-    pulseClass = '';
+    badgeBorder = 'border-amber-300/60';
     iconSvg = `
-      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
         <line x1="4" x2="4" y1="22" y2="15"/>
       </svg>`;
@@ -212,11 +214,10 @@ function createCustomIcon(type: MapWaypoint['type'], sequenceNumber?: number): L
 
   const html = `
     <div class="relative flex items-center justify-center -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
-      <div class="absolute w-8 h-8 rounded-full ${bgColor} opacity-40 ${pulseClass}"></div>
-      <div class="relative flex items-center justify-center w-7 h-7 rounded-full ${bgColor} shadow-lg border-2 border-slate-900 z-10 transition-transform duration-200 group-hover:scale-125">
+      <div class="flex items-center justify-center w-7 h-7 rounded-full ${bgColor} shadow-lg border-2 ${badgeBorder} z-10 transition-transform duration-150 group-hover:scale-115">
         ${iconSvg}
       </div>
-      <div class="absolute -bottom-6 px-1.5 py-0.5 rounded bg-slate-900/90 text-[10px] font-medium text-slate-200 border border-slate-700/50 shadow whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-20">
+      <div class="absolute -bottom-6 px-1.5 py-0.5 rounded bg-slate-900 text-[10px] font-semibold text-slate-100 border border-slate-700 shadow-md whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-20">
         ${label}
       </div>
     </div>
@@ -231,30 +232,30 @@ function createCustomIcon(type: MapWaypoint['type'], sequenceNumber?: number): L
 }
 
 /**
- * Creates custom SVG Pin for Google Maps
+ * Creates rock-solid custom SVG Pin for Google Maps
  */
 function createGoogleMarkerIcon(type: MapWaypoint['type'], sequenceNumber?: number): any {
   const fillColor = type === 'origin' ? '#10b981' : type === 'destination' ? '#f59e0b' : '#0ea5e9';
   const labelText = type === 'origin' ? 'A' : type === 'destination' ? 'B' : `${sequenceNumber || 1}`;
 
   const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="34" height="44" viewBox="0 0 34 44">
+    <svg xmlns="http://www.w3.org/2000/svg" width="30" height="38" viewBox="0 0 30 38">
       <defs>
-        <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000000" flood-opacity="0.5"/>
+        <filter id="pin-shadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="2" stdDeviation="1.5" flood-color="#000000" flood-opacity="0.4"/>
         </filter>
       </defs>
-      <path d="M17 0C7.61 0 0 7.61 0 17c0 12.75 17 27 17 27s17-14.25 17-27C34 7.61 26.39 0 17 0z" fill="${fillColor}" stroke="#0f172a" stroke-width="2" filter="url(#shadow)"/>
-      <circle cx="17" cy="16" r="10" fill="#0f172a"/>
-      <text x="17" y="20" font-family="system-ui, sans-serif" font-size="12" font-weight="bold" fill="#ffffff" text-anchor="middle">${labelText}</text>
+      <path d="M15 0C6.71 0 0 6.71 0 15c0 11.25 15 23 15 23s15-11.75 15-23C30 6.71 23.29 0 15 0z" fill="${fillColor}" stroke="#0f172a" stroke-width="1.5" filter="url(#pin-shadow)"/>
+      <circle cx="15" cy="14" r="8" fill="#0f172a"/>
+      <text x="15" y="18" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">${labelText}</text>
     </svg>
   `;
 
   const win = window as any;
   return {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    scaledSize: win.google?.maps ? new win.google.maps.Size(34, 44) : undefined,
-    anchor: win.google?.maps ? new win.google.maps.Point(17, 44) : undefined,
+    scaledSize: win.google?.maps ? new win.google.maps.Size(30, 38) : undefined,
+    anchor: win.google?.maps ? new win.google.maps.Point(15, 38) : undefined,
   };
 }
 
@@ -307,7 +308,7 @@ const LeafletResizeHandler: React.FC<{ isVisible: boolean }> = ({ isVisible }) =
   useEffect(() => {
     if (isVisible) {
       const t1 = setTimeout(() => map.invalidateSize(), 50);
-      const t2 = setTimeout(() => map.invalidateSize(), 250);
+      const t2 = setTimeout(() => map.invalidateSize(), 200);
       return () => {
         clearTimeout(t1);
         clearTimeout(t2);
@@ -399,7 +400,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
     };
   }, [waypoints, onRouteCalculated]);
 
-  // Render & Update Google Maps instance with Single-Shot Auto-Fit
+  // Render & Update Google Maps instance with Instant Theme Switching & Single-Shot Auto-Fit
   useEffect(() => {
     const win = window as any;
     if (engine !== 'google' || !isGoogleLoaded || !googleMapRef.current || !win.google?.maps) return;
@@ -421,14 +422,14 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
         mapTypeControl: false,
         streetViewControl: false,
         fullscreenControl: false,
-        gestureHandling: interactive ? 'greedy' : 'none', // Allows ultra smooth 1-finger drag & mouse-wheel zoom
-        styles: tileTheme === 'dark' ? GOOGLE_DARK_STYLE : undefined,
+        gestureHandling: interactive ? 'greedy' : 'none',
+        styles: tileTheme === 'dark' ? GOOGLE_DARK_STYLE : [],
         mapTypeId: tileTheme === 'satellite' ? win.google.maps.MapTypeId.HYBRID : win.google.maps.MapTypeId.ROADMAP,
       });
     } else {
       const map = googleMapInstance.current;
       map.setOptions({
-        styles: tileTheme === 'dark' ? GOOGLE_DARK_STYLE : undefined,
+        styles: tileTheme === 'dark' ? GOOGLE_DARK_STYLE : [],
         mapTypeId: tileTheme === 'satellite' ? win.google.maps.MapTypeId.HYBRID : win.google.maps.MapTypeId.ROADMAP,
         gestureHandling: interactive ? 'greedy' : 'none',
       });
@@ -447,7 +448,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
 
     const bounds = new win.google.maps.LatLngBounds();
 
-    // Add Custom Google SVG Markers
+    // Add Solid Custom Google SVG Markers (No flickering/drop animations)
     validPoints.forEach((wp) => {
       const pos = { lat: wp.latitude, lng: wp.longitude };
       bounds.extend(pos);
@@ -457,7 +458,6 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
         map,
         title: wp.name,
         icon: createGoogleMarkerIcon(wp.type, wp.sequenceNumber),
-        animation: win.google.maps.Animation.DROP,
       });
 
       const infoWindow = new win.google.maps.InfoWindow({
@@ -487,7 +487,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
         path,
         geodesic: true,
         strokeColor: '#6366f1',
-        strokeOpacity: 0.45,
+        strokeOpacity: 0.4,
         strokeWeight: 8,
         map,
       });
@@ -520,7 +520,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
           map.setZoom(14);
         }
         win.google.maps.event.trigger(map, 'resize');
-      }, 80);
+      }, 60);
     }
   }, [engine, isGoogleLoaded, waypoints, routeResult, tileTheme, interactive]);
 
@@ -553,11 +553,11 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
             title: 'Your Location',
             icon: {
               path: win.google.maps.SymbolPath.CIRCLE,
-              scale: 8,
+              scale: 7,
               fillColor: '#38bdf8',
               fillOpacity: 1,
               strokeColor: '#ffffff',
-              strokeWeight: 2.5,
+              strokeWeight: 2,
             },
           });
         }
@@ -586,21 +586,21 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
         isFullscreen ? 'fixed inset-4 z-50 rounded-2xl' : className || 'h-96 w-full'
       }`}
     >
-      {/* Floating Map Controls Toolbar (pointer-events-none on wrapper so map clicks pass through) */}
+      {/* Floating Map Controls Toolbar */}
       <div className="absolute top-3 right-3 z-[1000] flex items-center gap-2 pointer-events-none">
         {/* Engine Switcher (Google Maps vs OpenStreetMap) */}
         {googleApiKey && (
           <button
             type="button"
             onClick={() => setEngine(engine === 'google' ? 'leaflet' : 'google')}
-            className={`pointer-events-auto flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold shadow-xl backdrop-blur-md transition-all active:scale-95 ${
+            className={`pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold shadow-xl backdrop-blur-md transition-all active:scale-95 ${
               engine === 'google'
                 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
                 : 'bg-slate-900/90 text-slate-300 border-slate-700/60 hover:bg-slate-800'
             }`}
             title="Switch Map Provider"
           >
-            <Globe className="w-3.5 h-3.5" />
+            <Globe className="w-3.5 h-3.5 text-emerald-400" />
             <span>{engine === 'google' ? 'Google Maps' : 'OpenStreetMap'}</span>
           </button>
         )}
@@ -610,7 +610,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
           type="button"
           onClick={handleLocateMe}
           disabled={isLocating}
-          className={`pointer-events-auto flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold shadow-xl backdrop-blur-md transition-all active:scale-95 ${
+          className={`pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold shadow-xl backdrop-blur-md transition-all active:scale-95 ${
             userLocation
               ? 'bg-sky-500/20 text-sky-300 border-sky-500/40 hover:bg-sky-500/30'
               : 'bg-slate-900/90 text-slate-300 border-slate-700/60 hover:bg-slate-800'
@@ -625,37 +625,48 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
           <span className="hidden sm:inline">Locate Me</span>
         </button>
 
-        {/* Tile Theme Switcher */}
-        <div className="pointer-events-auto flex items-center p-1 rounded-xl bg-slate-900/90 border border-slate-700/60 shadow-xl backdrop-blur-md text-xs">
+        {/* Clean Theme Segmented Control */}
+        <div className="pointer-events-auto flex items-center p-1 rounded-xl bg-slate-900/95 border border-slate-700/80 shadow-2xl backdrop-blur-md text-xs gap-0.5">
           <button
             type="button"
             onClick={() => setTileTheme('dark')}
-            className={`px-2.5 py-1 rounded-lg transition-all ${
-              tileTheme === 'dark' ? 'bg-indigo-600 text-white font-medium shadow' : 'text-slate-400 hover:text-slate-200'
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition-all ${
+              tileTheme === 'dark'
+                ? 'bg-indigo-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
             title="Dark Theme"
           >
-            🌙 Dark
+            <Moon className="w-3 h-3" />
+            <span>Dark</span>
           </button>
+
           <button
             type="button"
             onClick={() => setTileTheme('light')}
-            className={`px-2.5 py-1 rounded-lg transition-all ${
-              tileTheme === 'light' ? 'bg-indigo-600 text-white font-medium shadow' : 'text-slate-400 hover:text-slate-200'
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition-all ${
+              tileTheme === 'light'
+                ? 'bg-indigo-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
             title="Clean Daylight Theme"
           >
-            ☀️ Light
+            <Sun className="w-3 h-3" />
+            <span>Light</span>
           </button>
+
           <button
             type="button"
             onClick={() => setTileTheme('satellite')}
-            className={`px-2.5 py-1 rounded-lg transition-all ${
-              tileTheme === 'satellite' ? 'bg-indigo-600 text-white font-medium shadow' : 'text-slate-400 hover:text-slate-200'
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition-all ${
+              tileTheme === 'satellite'
+                ? 'bg-indigo-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
             title="Satellite Imagery"
           >
-            🛰️ Sat
+            <Layers className="w-3 h-3" />
+            <span>Sat</span>
           </button>
         </div>
 
@@ -663,7 +674,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
         <button
           type="button"
           onClick={() => setIsFullscreen(!isFullscreen)}
-          className="pointer-events-auto p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/60 shadow-xl backdrop-blur-md transition-all active:scale-95"
+          className="pointer-events-auto p-2 rounded-xl bg-slate-900/95 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/80 shadow-xl backdrop-blur-md transition-all active:scale-95"
           title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen Map'}
         >
           {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
@@ -672,7 +683,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
 
       {/* Floating Route Statistics HUD */}
       {showStatsHud && routeResult && routeResult.distanceKm > 0 && (
-        <div className="pointer-events-none absolute bottom-3 left-3 right-3 sm:right-auto z-[1000] p-3 rounded-xl bg-slate-900/95 border border-slate-700/70 shadow-2xl backdrop-blur-md flex flex-wrap items-center gap-4 text-xs text-slate-200 animate-in fade-in slide-in-from-bottom-2 duration-200">
+        <div className="pointer-events-none absolute bottom-3 left-3 right-3 sm:right-auto z-[1000] p-3 rounded-xl bg-slate-900/95 border border-slate-700/80 shadow-2xl backdrop-blur-md flex flex-wrap items-center gap-4 text-xs text-slate-200">
           <div className="flex items-center gap-1.5 font-medium text-emerald-400">
             <Navigation className="h-4 w-4 shrink-0" />
             <span className="text-sm font-semibold text-slate-100">{routeResult.distanceKm} km</span>
@@ -722,13 +733,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
           touchZoom={interactive}
           doubleClickZoom={interactive}
           zoomControl={interactive}
-          className={`w-full h-full min-h-[240px] ${
-            tileTheme === 'dark'
-              ? 'leaflet-dark-tiles'
-              : tileTheme === 'light'
-              ? 'leaflet-light-tiles'
-              : ''
-          }`}
+          className="w-full h-full min-h-[240px]"
         >
           <TileLayer
             key={`${tileTheme}-${activeTile.url}`}
@@ -753,12 +758,11 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
                 className: 'user-gps-beacon',
                 html: `
                   <div class="relative flex items-center justify-center -translate-x-1/2 -translate-y-1/2">
-                    <div class="absolute w-8 h-8 rounded-full bg-sky-400 gps-pulse-ring"></div>
-                    <div class="relative w-4 h-4 rounded-full bg-sky-400 border-2 border-white shadow-lg"></div>
+                    <div class="w-3.5 h-3.5 rounded-full bg-sky-400 border-2 border-white shadow-md user-gps-dot"></div>
                   </div>
                 `,
-                iconSize: [24, 24],
-                iconAnchor: [12, 12],
+                iconSize: [16, 16],
+                iconAnchor: [8, 8],
               })}
             >
               <Popup>
@@ -775,8 +779,8 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
                 positions={routeResult.coordinates}
                 pathOptions={{
                   color: '#6366f1',
-                  weight: 8,
-                  opacity: 0.4,
+                  weight: 7,
+                  opacity: 0.35,
                   lineCap: 'round',
                   lineJoin: 'round',
                 }}
@@ -786,7 +790,7 @@ export const TripRouteMap: React.FC<TripRouteMapProps> = ({
                 positions={routeResult.coordinates}
                 pathOptions={{
                   color: '#38bdf8',
-                  weight: 4.5,
+                  weight: 4,
                   opacity: 0.95,
                   lineCap: 'round',
                   lineJoin: 'round',
