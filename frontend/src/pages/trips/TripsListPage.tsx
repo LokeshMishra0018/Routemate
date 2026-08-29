@@ -43,7 +43,7 @@ export const TripsListPage: React.FC = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState<'all' | 'mine' | 'peers'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'mine' | 'deleted' | 'peers'>('all');
   const [searchInput, setSearchInput] = useState<string>('');
   const [appliedSearchQuery, setAppliedSearchQuery] = useState<string>('');
   const [selectedHotspot, setSelectedHotspot] = useState<string>('');
@@ -65,10 +65,11 @@ export const TripsListPage: React.FC = () => {
       toast({
         type: 'success',
         title: 'Trip Deleted',
-        message: 'Your trip has been cancelled and removed from campus search.',
+        message: 'Your trip has been moved to Deleted Trips and removed from public search.',
       });
       setDeleteModalTrip(null);
       queryClient.invalidateQueries({ queryKey: ['trips-list'] });
+      queryClient.invalidateQueries({ queryKey: ['my-trips-list'] });
       queryClient.invalidateQueries({ queryKey: ['my-trips-dashboard'] });
     },
     onError: (err: any) => {
@@ -93,6 +94,7 @@ export const TripsListPage: React.FC = () => {
         message: 'Your trip has been reactivated and is now visible in campus search.',
       });
       queryClient.invalidateQueries({ queryKey: ['trips-list'] });
+      queryClient.invalidateQueries({ queryKey: ['my-trips-list'] });
       queryClient.invalidateQueries({ queryKey: ['my-trips-dashboard'] });
     },
     onError: (err: any) => {
@@ -116,7 +118,8 @@ export const TripsListPage: React.FC = () => {
     setSelectedHotspot('');
   };
 
-  const { data: trips, isLoading, isError, refetch } = useQuery({
+  // 1. Fetch public active trips
+  const { data: trips, isLoading: isTripsLoading, isError: isTripsError, refetch } = useQuery({
     queryKey: ['trips-list', transportFilter, dateFilter, currentUserId],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -133,7 +136,17 @@ export const TripsListPage: React.FC = () => {
     },
   });
 
-  // Fetch connections to mark connected trips
+  // 2. Fetch all current user's trips (Active + Deleted/Cancelled)
+  const { data: myTripsData, isLoading: isMyTripsLoading } = useQuery({
+    queryKey: ['my-trips-list', currentUserId],
+    queryFn: async () => {
+      const res = await apiClient.get('/trips/me?pageSize=50');
+      return res.data.data as Trip[];
+    },
+    enabled: !!currentUserId,
+  });
+
+  // 3. Fetch connections to mark connected trips
   const { data: connections } = useQuery({
     queryKey: ['all-connections', currentUserId],
     queryFn: async () => {
@@ -160,27 +173,35 @@ export const TripsListPage: React.FC = () => {
     );
   };
 
+  const myAllTrips = myTripsData || [];
+  const activeMyTrips = myAllTrips.filter((t: any) => !t.isDeleted && t.status !== 'cancelled');
+  const deletedMyTrips = myAllTrips.filter((t: any) => t.isDeleted || t.status === 'cancelled');
+
   // Filter based on active tab & search query & feature toggles
   const filteredTrips = useMemo(() => {
-    if (!trips) return [];
+    let sourcePool: any[] = [];
+    if (activeTab === 'deleted') {
+      sourcePool = deletedMyTrips;
+    } else if (activeTab === 'mine') {
+      sourcePool = activeMyTrips;
+    } else if (activeTab === 'peers') {
+      sourcePool = (trips || []).filter((t) => !checkIsMyTrip(t));
+    } else {
+      sourcePool = trips || [];
+    }
 
-    return trips.filter((trip: any) => {
-      const isMyTrip = checkIsMyTrip(trip);
+    return sourcePool.filter((trip: any) => {
       const traveler = trip.user || trip.creator;
       const bookedSeats = connections?.filter((c) => c.tripId === trip.id && c.status === 'accepted').length || 0;
       const openSeats = Math.max(0, (trip.availableSeats ?? 1) - bookedSeats);
 
-      // 1. Tab filter
-      if (activeTab === 'mine' && !isMyTrip) return false;
-      if (activeTab === 'peers' && isMyTrip) return false;
-
-      // 2. Open seats filter
+      // 1. Open seats filter
       if (onlyOpenSeats && openSeats <= 0) return false;
 
-      // 3. Cost share filter
+      // 2. Cost share filter
       if (onlyCostShare && (!trip.costSharing?.enabled || !trip.costSharing?.estimatedTotalCost)) return false;
 
-      // 4. Hotspot / Keyword search
+      // 3. Hotspot / Keyword search
       const effectiveSearch = (appliedSearchQuery || selectedHotspot).trim().toLowerCase();
       if (effectiveSearch) {
         const sourceMatch = trip.source?.name?.toLowerCase().includes(effectiveSearch);
@@ -196,11 +217,15 @@ export const TripsListPage: React.FC = () => {
 
       return true;
     });
-  }, [trips, activeTab, onlyOpenSeats, onlyCostShare, appliedSearchQuery, selectedHotspot, connections, currentUserId]);
+  }, [trips, myTripsData, activeTab, onlyOpenSeats, onlyCostShare, appliedSearchQuery, selectedHotspot, connections, currentUserId]);
 
   const allCount = trips?.length || 0;
-  const myTripsCount = trips?.filter((t) => checkIsMyTrip(t)).length || 0;
-  const peersCount = allCount - myTripsCount;
+  const myTripsCount = activeMyTrips.length;
+  const deletedCount = deletedMyTrips.length;
+  const peersCount = (trips || []).filter((t) => !checkIsMyTrip(t)).length;
+
+  const isLoading = isTripsLoading || (activeTab === 'mine' && isMyTripsLoading) || (activeTab === 'deleted' && isMyTripsLoading);
+  const isError = isTripsError;
 
   const hasActiveFilters = Boolean(
     appliedSearchQuery || selectedHotspot || transportFilter || dateFilter || onlyOpenSeats || onlyCostShare
@@ -372,7 +397,7 @@ export const TripsListPage: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/80">
           <div className="flex items-center gap-2">
             {/* View Tabs */}
-            <div className="flex items-center gap-1 p-0.5 bg-slate-950/80 rounded-xl border border-slate-800">
+            <div className="flex flex-wrap items-center gap-1 p-0.5 bg-slate-950/80 rounded-xl border border-slate-800">
               <button
                 onClick={() => setActiveTab('all')}
                 className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
@@ -392,6 +417,16 @@ export const TripsListPage: React.FC = () => {
                 }`}
               >
                 <Sparkles className="w-3 h-3 text-indigo-300" /> My Trips ({myTripsCount})
+              </button>
+              <button
+                onClick={() => setActiveTab('deleted')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
+                  activeTab === 'deleted'
+                    ? 'bg-rose-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Trash2 className="w-3 h-3 text-rose-300" /> Deleted Trips ({deletedCount})
               </button>
               <button
                 onClick={() => setActiveTab('peers')}
@@ -430,6 +465,8 @@ export const TripsListPage: React.FC = () => {
           title={
             hasActiveFilters
               ? 'No Matching Routes Found'
+              : activeTab === 'deleted'
+              ? 'No Deleted Trips'
               : activeTab === 'mine'
               ? 'No Published Trips Yet'
               : 'No Routes Available'
@@ -437,12 +474,14 @@ export const TripsListPage: React.FC = () => {
           description={
             hasActiveFilters
               ? `No routes match "${appliedSearchQuery || selectedHotspot || 'your filters'}". Try clearing your search or filters.`
+              : activeTab === 'deleted'
+              ? 'You have no cancelled or deleted trips in your account history.'
               : activeTab === 'mine'
               ? "You haven't scheduled any upcoming trips yet. Publish a route to find student travel buddies."
               : 'Try adjusting your date or transport filters, or schedule a new trip to start matching.'
           }
-          actionLabel={hasActiveFilters ? 'Clear Search & Filters' : 'Publish a New Trip'}
-          onAction={hasActiveFilters ? handleResetFilters : () => window.location.assign('/trips/new')}
+          actionLabel={hasActiveFilters ? 'Clear Search & Filters' : activeTab === 'deleted' ? 'View My Active Trips' : 'Publish a New Trip'}
+          onAction={hasActiveFilters ? handleResetFilters : activeTab === 'deleted' ? () => setActiveTab('mine') : () => window.location.assign('/trips/new')}
         />
       )}
 
