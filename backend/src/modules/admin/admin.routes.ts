@@ -493,4 +493,18 @@ export const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance): Pro
       return reply.status(200).send(createSuccessResponse(result));
     }
   );
+
+  // GET /api/v1/admin/recent-logins - Real-time stream of latest logins & active user sessions
+  app.get(
+    '/recent-logins',
+    {
+      preHandler: [authenticate, requireRole('moderator', 'admin')],
+    },
+    async (request, reply) => {
+      const query = request.query as { limit?: string };
+      const limit = query.limit ? parseInt(query.limit, 10) : 25;
+      const result = await adminService.getRecentLogins(limit);
+      return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
 };

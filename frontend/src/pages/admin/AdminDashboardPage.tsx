@@ -17,6 +17,15 @@ import {
   Clock,
   Flame,
   CheckCircle2,
+  LogIn,
+  RefreshCw,
+  Globe,
+  Lock,
+  Laptop,
+  Smartphone,
+  Crown,
+  User as UserIcon,
+  ShieldCheck,
 } from 'lucide-react';
 import { apiClient } from '../../services/api.client';
 import { AdminOverviewStats } from '../../types';
@@ -24,6 +33,35 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { LoadingSpinner } from '../../components/ui/EmptyState';
+
+export interface RecentLoginRecord {
+  sessionId: string;
+  userId: string;
+  email: string;
+  fullName: string;
+  avatarUrl: string | null;
+  role: string;
+  verificationStatus: string;
+  trustScore: number;
+  authMethod: 'google' | 'password';
+  deviceInfo: string;
+  ipMetadata: string | null;
+  loginAt: string;
+  lastUsedAt: string;
+  isRevoked: boolean;
+}
+
+function formatTimeAgo(isoString: string): string {
+  const diffSec = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
+  if (diffSec < 10) return 'Just now';
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDays = Math.floor(diffHr / 24);
+  return `${diffDays}d ago`;
+}
 
 export const AdminDashboardPage: React.FC = () => {
   const { data, isLoading } = useQuery<AdminOverviewStats>({
@@ -34,6 +72,22 @@ export const AdminDashboardPage: React.FC = () => {
     },
     refetchInterval: 10000,
   });
+
+  const {
+    data: recentLogins,
+    isLoading: isLoadingLogins,
+    refetch: refetchLogins,
+    isFetching: isFetchingLogins,
+  } = useQuery<RecentLoginRecord[]>({
+    queryKey: ['admin-recent-logins'],
+    queryFn: async () => {
+      const res = await apiClient.get('/admin/recent-logins?limit=15');
+      return res.data.data;
+    },
+    refetchInterval: 10000,
+  });
+
+  const latestLogin = recentLogins && recentLogins.length > 0 ? recentLogins[0] : null;
 
   if (isLoading && !data) {
     return (
@@ -213,6 +267,210 @@ export const AdminDashboardPage: React.FC = () => {
             </Link>
           </div>
         </Card>
+      </div>
+
+      {/* Zone 2.5: Real-Time Login Stream & Last Active Commuter */}
+      <div className="bg-slate-900/70 rounded-2xl border border-slate-800 p-5 space-y-4 shadow-xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center">
+              <LogIn className="w-4 h-4 text-indigo-400" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                Recent Login Activity &amp; Active Sessions
+                <Badge variant="brand" className="text-[10px] uppercase font-bold tracking-wider">
+                  Live Audit
+                </Badge>
+              </h2>
+              <p className="text-xs text-slate-400">
+                Chronological platform access history, auth methods, and device telemetry
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => refetchLogins()}
+              className="text-xs gap-1.5"
+              disabled={isFetchingLogins}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isFetchingLogins ? 'animate-spin text-indigo-400' : 'text-slate-400'}`} />
+              <span>Refresh Stream</span>
+            </Button>
+            <Link to="/admin/live">
+              <Button size="sm" variant="ghost" className="text-xs text-indigo-400 hover:text-indigo-300">
+                View Live Telemetry →
+              </Button>
+            </Link>
+          </div>
+        </div>
+
+        {/* Highlighted Banner: The Very Last Logged In User */}
+        {latestLogin && (
+          <div className="p-4 rounded-xl bg-gradient-to-r from-indigo-950/60 via-slate-900 to-indigo-950/40 border border-indigo-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="relative">
+                <img
+                  src={latestLogin.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(latestLogin.email)}`}
+                  alt={latestLogin.fullName}
+                  className="w-12 h-12 rounded-xl object-cover border border-slate-700 bg-slate-950"
+                />
+                <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-slate-950" title="Active Session" />
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-bold text-white">{latestLogin.fullName}</span>
+                  {latestLogin.role === 'admin' ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
+                      <Crown className="w-3 h-3" /> Admin
+                    </span>
+                  ) : latestLogin.verificationStatus === 'approved' ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-bold">
+                      <ShieldCheck className="w-3 h-3 text-sky-400" /> Verified Student (Blue Tick)
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
+                      🟡 ID Pending
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-slate-400 mt-0.5 font-mono">{latestLogin.email}</div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 text-xs text-slate-300 flex-wrap md:justify-end">
+              <div className="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 px-3 py-1.5 rounded-lg">
+                {latestLogin.authMethod === 'google' ? (
+                  <>
+                    <Globe className="w-3.5 h-3.5 text-rose-400" />
+                    <span className="font-semibold text-rose-300">Google OAuth</span>
+                  </>
+                ) : (
+                  <>
+                    <Lock className="w-3.5 h-3.5 text-indigo-400" />
+                    <span className="font-semibold text-indigo-300">Email + Password</span>
+                  </>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 px-3 py-1.5 rounded-lg">
+                <Laptop className="w-3.5 h-3.5 text-slate-400" />
+                <span className="text-slate-300 truncate max-w-[160px]">{latestLogin.deviceInfo}</span>
+              </div>
+
+              <div className="text-right">
+                <div className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 justify-end">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  Last Login: {formatTimeAgo(latestLogin.loginAt)}
+                </div>
+                <div className="text-[10px] text-slate-500">
+                  {new Date(latestLogin.loginAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} • {new Date(latestLogin.loginAt).toLocaleDateString()}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Recent Logins Table */}
+        <div className="overflow-x-auto rounded-xl border border-slate-800">
+          <table className="w-full text-left text-xs text-slate-300">
+            <thead className="bg-slate-950/90 text-slate-400 uppercase tracking-wider text-[10px] font-semibold border-b border-slate-800">
+              <tr>
+                <th className="py-3 px-4">Commuter</th>
+                <th className="py-3 px-4">Verification Status</th>
+                <th className="py-3 px-4">Auth Method</th>
+                <th className="py-3 px-4">Device &amp; Telemetry</th>
+                <th className="py-3 px-4">Logged In</th>
+                <th className="py-3 px-4 text-right">Trust Score</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/60 bg-slate-950/40">
+              {isLoadingLogins ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-slate-500">
+                    <LoadingSpinner size="sm" text="Fetching real-time login sessions..." />
+                  </td>
+                </tr>
+              ) : !recentLogins || recentLogins.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-slate-500">
+                    No recent login records recorded yet.
+                  </td>
+                </tr>
+              ) : (
+                recentLogins.map((item, idx) => (
+                  <tr key={item.sessionId || idx} className="hover:bg-slate-900/60 transition-colors">
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2.5">
+                        <img
+                          src={item.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(item.email)}`}
+                          alt={item.fullName}
+                          className="w-7 h-7 rounded-lg object-cover bg-slate-900 border border-slate-700"
+                        />
+                        <div>
+                          <div className="font-bold text-slate-200">{item.fullName}</div>
+                          <div className="text-[11px] text-slate-400 font-mono">{item.email}</div>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="py-3 px-4">
+                      {item.role === 'admin' ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
+                          <Crown className="w-3 h-3" /> Admin
+                        </span>
+                      ) : item.verificationStatus === 'approved' ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/15 text-sky-300 border border-sky-500/30 text-[10px] font-bold">
+                          <ShieldCheck className="w-3 h-3 text-sky-400" /> Blue Tick
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
+                          🟡 ID Pending
+                        </span>
+                      )}
+                    </td>
+
+                    <td className="py-3 px-4">
+                      {item.authMethod === 'google' ? (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-300 border border-rose-500/20 text-[11px] font-semibold">
+                          <Globe className="w-3 h-3 text-rose-400" /> Google OAuth
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 text-[11px] font-semibold">
+                          <Lock className="w-3 h-3 text-indigo-400" /> Email/Password
+                        </span>
+                      )}
+                    </td>
+
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-1.5 text-slate-300 text-[11px]">
+                        <Laptop className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                        <span className="truncate max-w-[180px]">{item.deviceInfo}</span>
+                      </div>
+                    </td>
+
+                    <td className="py-3 px-4">
+                      <div className="font-semibold text-slate-200">{formatTimeAgo(item.loginAt)}</div>
+                      <div className="text-[10px] text-slate-500 font-mono">
+                        {new Date(item.loginAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </td>
+
+                    <td className="py-3 px-4 text-right">
+                      <span className="font-mono font-bold text-amber-300 bg-amber-950/60 border border-amber-500/30 px-2 py-0.5 rounded text-[11px]">
+                        {item.trustScore} pts
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Zone 3: 70/30 Operations Split */}

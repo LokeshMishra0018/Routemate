@@ -1399,6 +1399,51 @@ export class AdminService {
       })
     );
 
+  /**
+   * Get list of recent user logins & active sessions for security and auditing
+   */
+  async getRecentLogins(limit = 25) {
+    const db = getDb();
+    const sessions = await db
+      .collection(COLLECTIONS.SESSIONS)
+      .find({})
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .toArray();
+
+    const items = await Promise.all(
+      sessions.map(async (s) => {
+        let user = null;
+        let profile = null;
+        try {
+          user = await usersRepository.findUserById(s.userId);
+          profile = await usersRepository.findProfileByUserId(s.userId);
+        } catch {
+          // ignore lookup errors
+        }
+
+        const deviceInfoStr = s.deviceInfo || 'Web Browser';
+        const isGoogle = deviceInfoStr.toLowerCase().includes('google');
+
+        return {
+          sessionId: s._id.toHexString(),
+          userId: s.userId,
+          email: user?.email || 'Unknown User',
+          fullName: profile?.fullName || user?.email?.split('@')[0] || 'Unknown User',
+          avatarUrl: profile?.avatarUrl || null,
+          role: user?.role || 'student',
+          verificationStatus: profile?.verificationStatus || 'unverified',
+          trustScore: profile?.trustScore || 50,
+          authMethod: isGoogle ? 'google' : 'password',
+          deviceInfo: deviceInfoStr,
+          ipMetadata: s.ipMetadata || null,
+          loginAt: s.createdAt,
+          lastUsedAt: s.lastUsedAt || s.createdAt,
+          isRevoked: Boolean(s.revokedAt),
+        };
+      })
+    );
+
     return items;
   }
 }
