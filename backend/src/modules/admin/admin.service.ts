@@ -1399,6 +1399,9 @@ export class AdminService {
       })
     );
 
+    return items;
+  }
+
   /**
    * Get list of recent user logins & active sessions for security and auditing
    */
