@@ -22,6 +22,7 @@ import {
   Users,
   Radio,
   Settings,
+  ArrowLeft,
 } from 'lucide-react';
 import { apiClient } from '../../services/api.client';
 import { useAuth } from '../../context/AuthContext';
@@ -63,12 +64,13 @@ export const ChatPage: React.FC = () => {
     },
   });
 
-  // Default to first conversation
+  // Default to first conversation on desktop screens only
   useEffect(() => {
+    if (!conversationId && window.innerWidth < 768) return;
     if (!activeConvId && conversations && conversations.length > 0) {
       setActiveConvId(conversations[0].id);
     }
-  }, [activeConvId, conversations]);
+  }, [activeConvId, conversations, conversationId]);
 
   // Helper to extract companion profile from conversation
   const getPartnerFromConv = (conv?: Conversation, myId?: string): PublicProfile | undefined => {
@@ -240,7 +242,7 @@ export const ChatPage: React.FC = () => {
   }, [conversations, sidebarSearch, filterTab, user?.id]);
 
   return (
-    <div className="h-[calc(100vh-120px)] min-h-[620px] flex rounded-xl overflow-hidden border border-[#d1d7db] shadow-2xl bg-[#efeae2] font-sans antialiased text-[#111b21]">
+    <div className="h-[calc(100vh-140px)] md:h-[calc(100vh-120px)] min-h-[500px] flex rounded-xl overflow-hidden border border-[#d1d7db] shadow-2xl bg-[#efeae2] font-sans antialiased text-[#111b21]">
       {/* ================= 1. WhatsApp Left Thin App Strip ================= */}
       <div className="w-14 bg-[#f0f2f5] border-r border-[#e9edef] flex-col items-center justify-between py-3 shrink-0 hidden md:flex select-none">
         {/* Top Navigation Icons */}
@@ -283,7 +285,12 @@ export const ChatPage: React.FC = () => {
       </div>
 
       {/* ================= 2. WhatsApp Left Chats Sidebar ================= */}
-      <aside className="w-full sm:w-80 md:w-96 bg-white border-r border-[#e9edef] flex flex-col shrink-0">
+      <aside
+        className={cn(
+          'w-full md:w-80 lg:w-96 bg-white border-r border-[#e9edef] flex flex-col shrink-0',
+          activeConvId ? 'hidden md:flex' : 'flex'
+        )}
+      >
         {/* Chats Top Header */}
         <div className="px-4 py-3.5 bg-white flex items-center justify-between">
           <h1 className="text-xl font-black text-[#111b21] tracking-tight">
@@ -438,12 +445,27 @@ export const ChatPage: React.FC = () => {
       </aside>
 
       {/* ================= 3. WhatsApp Main Chat Room ================= */}
-      <section className="flex-1 flex flex-col bg-[#efeae2] relative min-w-0">
+      <section
+        className={cn(
+          'flex-1 flex flex-col bg-[#efeae2] relative min-w-0',
+          activeConvId ? 'flex' : 'hidden md:flex'
+        )}
+      >
         {activeConvId && (
           <>
             {/* WhatsApp Top Contact Header */}
-            <div className="px-4 py-2.5 bg-[#f0f2f5] border-b border-[#e9edef] flex items-center justify-between gap-3 z-10 shadow-sm">
-              <div className="flex items-center gap-3 min-w-0">
+            <div className="px-3 sm:px-4 py-2.5 bg-[#f0f2f5] border-b border-[#e9edef] flex items-center justify-between gap-2 sm:gap-3 z-10 shadow-sm">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                {/* Mobile Back Button */}
+                <button
+                  type="button"
+                  onClick={() => setActiveConvId(null)}
+                  className="md:hidden p-1.5 -ml-1 text-[#54656f] hover:bg-[#e9edef] rounded-full transition-colors shrink-0"
+                  title="Back to chats list"
+                >
+                  <ArrowLeft className="w-5 h-5 text-[#54656f]" />
+                </button>
+
                 <Avatar
                   name={otherProfile?.fullName || 'Traveler'}
                   src={otherProfile?.avatarUrl}
