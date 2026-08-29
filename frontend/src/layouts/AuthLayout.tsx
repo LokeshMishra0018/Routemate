@@ -17,14 +17,14 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
 
       {/* Top Header */}
       <header className="relative z-10 w-full max-w-7xl mx-auto px-6 py-6 flex items-center justify-between">
-        <Link to="/login" className="flex items-center gap-2.5 group">
+        <Link to="/overview" className="flex items-center gap-2.5 group cursor-pointer" title="Go to RouteMate Overview">
           <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-emerald-400 p-0.5 shadow-glow transition-transform duration-300 group-hover:scale-105">
             <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
               <Compass className="w-5 h-5 text-indigo-400" />
             </div>
           </div>
           <div>
-            <span className="text-lg font-black tracking-tight text-white">
+            <span className="text-lg font-black tracking-tight text-white group-hover:text-amber-300 transition-colors">
               Route<span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-emerald-400">Mate</span>
             </span>
             <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Campus Mobility</span>
