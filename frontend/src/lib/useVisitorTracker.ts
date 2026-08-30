@@ -61,6 +61,31 @@ function getBackendPingUrl(): string {
   return `${envUrl.replace(/\/$/, '')}/telemetry/visitor-ping`;
 }
 
+function getPathAction(pathname: string, pageOverride?: string): { action: string; section?: string } {
+  if (pageOverride && pageOverride !== 'Overview Page' && pageOverride !== 'Auth Page') {
+    return { action: `Viewing ${pageOverride}`, section: pageOverride };
+  }
+  if (pathname === '/' || pathname === '/overview' || pathname === '/about') {
+    return { action: 'Browsing Overview Page', section: 'Hero Banner' };
+  }
+  if (pathname === '/login') {
+    return { action: 'Viewing Student Sign-In Page', section: 'Sign-In Form' };
+  }
+  if (pathname === '/register') {
+    return { action: 'Filling Student Registration Form', section: 'Register Form' };
+  }
+  if (pathname === '/verify-email') {
+    return { action: 'Verifying College Email OTP', section: 'OTP Verification' };
+  }
+  if (pathname === '/forgot-password' || pathname === '/reset-password') {
+    return { action: 'Password Recovery Screen', section: 'Password Reset' };
+  }
+  if (pathname === '/trips') {
+    return { action: 'Browsing Public Campus Trips', section: 'Trips Explorer' };
+  }
+  return { action: `Browsing ${pathname}`, section: pathname.replace('/', '') };
+}
+
 function sendVisitorPing(
   payload: {
     currentPath: string;
@@ -90,7 +115,7 @@ function sendVisitorPing(
 
     const targetUrl = getBackendPingUrl();
 
-    // If leaving the site on tab close, use beacon or keepalive for guaranteed zero-delay delivery
+    // If leaving the site on tab close, use beacon or keepalive
     if (isLeaving) {
       const blob = new Blob([JSON.stringify(fullPayload)], { type: 'application/json' });
       if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
@@ -116,22 +141,25 @@ function sendVisitorPing(
 }
 
 /**
- * Invisible, zero-permission telemetry hook for overview & public pages.
- * Pings every 8 seconds while visible and detects instant tab-close exits.
+ * Invisible, zero-permission telemetry hook for overview, login, registration & public pages.
+ * Pings every 8 seconds while visible and smoothly updates as the visitor navigates the app.
  */
-export function useVisitorTracker(pageName: string = 'Overview Page') {
+export function useVisitorTracker(pageName?: string) {
   const location = useLocation();
-  const lastSectionRef = useRef<string>('Hero Section');
+  const lastSectionRef = useRef<string>('');
 
   useEffect(() => {
-    // 1. Initial page landing ping
+    const routeInfo = getPathAction(location.pathname, pageName);
+    lastSectionRef.current = routeInfo.section || '';
+
+    // 1. Send immediate page navigation ping
     sendVisitorPing({
       currentPath: location.pathname,
-      currentAction: `Landed on ${pageName}`,
-      currentSection: 'Hero Banner',
+      currentAction: routeInfo.action,
+      currentSection: routeInfo.section,
     });
 
-    // 2. Set up IntersectionObserver on landing page sections
+    // 2. Set up IntersectionObserver on landing page sections if present
     const sectionMap: Record<string, string> = {
       modes: 'Exploring Multi-Modal Commutes (Metro, Train, Cab, Bus)',
       badges: 'Reviewing 4-Tier Student Trust Badges',
@@ -168,10 +196,15 @@ export function useVisitorTracker(pageName: string = 'Overview Page') {
     // 3. 8-Second Keepalive heartbeat while active
     const interval = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        const currentRoute = getPathAction(location.pathname, pageName);
+        const currentAction = lastSectionRef.current && sectionMap[lastSectionRef.current]
+          ? sectionMap[lastSectionRef.current]
+          : currentRoute.action;
+
         sendVisitorPing({
           currentPath: location.pathname,
-          currentAction: `Active in ${lastSectionRef.current || pageName}`,
-          currentSection: lastSectionRef.current,
+          currentAction,
+          currentSection: lastSectionRef.current || currentRoute.section,
         });
       }
     }, 8000);
@@ -188,10 +221,11 @@ export function useVisitorTracker(pageName: string = 'Overview Page') {
           true
         );
       } else if (document.visibilityState === 'visible') {
+        const currentRoute = getPathAction(location.pathname, pageName);
         sendVisitorPing({
           currentPath: location.pathname,
-          currentAction: `Returned to ${lastSectionRef.current || pageName}`,
-          currentSection: lastSectionRef.current,
+          currentAction: `Returned to ${currentRoute.action}`,
+          currentSection: lastSectionRef.current || currentRoute.section,
         });
       }
     };
@@ -217,15 +251,7 @@ export function useVisitorTracker(pageName: string = 'Overview Page') {
       window.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handlePageHide);
       window.removeEventListener('beforeunload', handlePageHide);
-      // Fire final leave beacon on unmount
-      sendVisitorPing(
-        {
-          currentPath: location.pathname,
-          currentAction: 'Navigated Away',
-          currentSection: lastSectionRef.current,
-        },
-        true
-      );
+      // NOTE: Do NOT send isLeaving on unmount so route navigation within the app remains active
     };
   }, [location.pathname, pageName]);
 }

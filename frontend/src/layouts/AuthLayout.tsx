@@ -1,12 +1,15 @@
 import React from 'react';
 import { Outlet, Link } from 'react-router-dom';
 import { Compass, ShieldCheck } from 'lucide-react';
+import { useVisitorTracker } from '../lib/useVisitorTracker';
 
 interface AuthLayoutProps {
   children?: React.ReactNode;
 }
 
 export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
+  // Seamless visitor tracking across all authentication pages
+  useVisitorTracker();
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-indigo-500 selection:text-white">
       {/* Background glowing gradients */}
