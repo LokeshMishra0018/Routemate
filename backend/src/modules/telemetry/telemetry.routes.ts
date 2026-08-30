@@ -44,4 +44,37 @@ export const telemetryRoutes: FastifyPluginAsync = async (app: FastifyInstance):
       })
     );
   });
+
+  /**
+   * POST /api/v1/telemetry/visitor-convert
+   * Identity stitching: converts an anonymous visitor session into an authenticated student
+   */
+  app.post('/visitor-convert', async (request, reply) => {
+    const body = (request.body as {
+      sessionId: string;
+      user: {
+        userId: string;
+        name: string;
+        email: string;
+        college?: string;
+        branch?: string;
+        verificationBadge?: string;
+        trustScore?: number;
+      };
+    }) || {};
+
+    if (!body.sessionId || !body.user) {
+      return reply.status(400).send({ error: { message: 'sessionId and user object are required' } });
+    }
+
+    const converted = visitorTrackerStore.convertVisitor(body.sessionId, body.user);
+
+    return reply.status(200).send(
+      createSuccessResponse({
+        converted: !!converted,
+        sessionId: body.sessionId,
+        user: body.user,
+      })
+    );
+  });
 };

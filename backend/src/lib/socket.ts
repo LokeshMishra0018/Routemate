@@ -91,6 +91,10 @@ export function initSocketIO(httpServer: HttpServer): SocketIOServer {
     let fullName = userEmail.split('@')[0];
     let avatarUrl: string | null = null;
     let collegeName = 'KIET Group of Institutions';
+    let branch: string | undefined = undefined;
+    let verificationBadge: 'verified' | 'id_pending' | 'unverified' | 'admin' =
+      userRole === 'admin' ? 'admin' : 'unverified';
+    let trustScore = 85;
 
     try {
       const db = getDb();
@@ -99,6 +103,13 @@ export function initSocketIO(httpServer: HttpServer): SocketIOServer {
         if (profile) {
           fullName = profile.fullName || fullName;
           avatarUrl = profile.avatarUrl || null;
+          branch = profile.branch || profile.department || undefined;
+          if (profile.verificationStatus) {
+            verificationBadge = profile.verificationStatus;
+          }
+          if (typeof profile.trustScore === 'number') {
+            trustScore = profile.trustScore;
+          }
         }
       }
     } catch {
@@ -124,6 +135,9 @@ export function initSocketIO(httpServer: HttpServer): SocketIOServer {
       email: userEmail,
       avatarUrl,
       college: collegeName,
+      branch,
+      verificationBadge,
+      trustScore,
       role: userRole,
       currentPath: '/dashboard',
       currentAction: 'Viewing Dashboard',
@@ -131,6 +145,8 @@ export function initSocketIO(httpServer: HttpServer): SocketIOServer {
       browserInfo,
       connectedAt: new Date().toISOString(),
       lastPingAt: new Date().toISOString(),
+      disconnectedAt: null,
+      isOnline: true,
       isIdle: false,
       sessionDurationSeconds: 0,
     };
@@ -141,7 +157,7 @@ export function initSocketIO(httpServer: HttpServer): SocketIOServer {
     io?.to('room:admin:telemetry').emit('admin:presence_updated', {
       type: 'connected',
       presence: initialPresence,
-      liveCount: presenceStore.getAllPresence().length,
+      liveCount: presenceStore.getAllPresence().filter((p) => p.isOnline).length,
     });
 
     socket.emit('gateway:ready', {
@@ -276,7 +292,7 @@ export function initSocketIO(httpServer: HttpServer): SocketIOServer {
         type: 'disconnected',
         socketId: socket.id,
         userId,
-        liveCount: presenceStore.getAllPresence().length,
+        liveCount: presenceStore.getAllPresence().filter((p) => p.isOnline).length,
       });
     });
   });

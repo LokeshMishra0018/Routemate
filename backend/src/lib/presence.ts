@@ -5,6 +5,9 @@ export interface LivePresence {
   email: string;
   avatarUrl: string | null;
   college: string;
+  branch?: string;
+  verificationBadge?: 'verified' | 'id_pending' | 'unverified' | 'admin';
+  trustScore?: number;
   role: string;
   currentPath: string;
   currentAction: string;
@@ -12,6 +15,8 @@ export interface LivePresence {
   browserInfo: string;
   connectedAt: string;
   lastPingAt: string;
+  disconnectedAt?: string | null;
+  isOnline: boolean;
   isIdle: boolean;
   sessionDurationSeconds: number;
 }
@@ -27,11 +32,11 @@ export interface PresenceStore {
 }
 
 /**
- * In-memory thread-safe Presence Store.
- * Pluggable interface for future Redis / distributed cluster support.
+ * In-memory thread-safe Presence Store with student session history retention.
  */
 export class MemoryPresenceStore implements PresenceStore {
-  private presences: Map<string, LivePresence> = new Map();
+  private activePresences: Map<string, LivePresence> = new Map();
+  private sessionHistory: Map<string, LivePresence> = new Map(); // Keyed by userId/socketId to preserve disconnected sessions
   private todayPeak = 0;
   private todayPeakTime = 'Live Now';
   private allTimePeak = 0;
@@ -43,7 +48,7 @@ export class MemoryPresenceStore implements PresenceStore {
     const today = new Date().toDateString();
     if (this.currentDay !== today) {
       this.currentDay = today;
-      this.todayPeak = this.presences.size;
+      this.todayPeak = this.activePresences.size;
       this.todayPeakTime = 'Live Now';
       this.hourlyMax = new Array(24).fill(0);
     }
@@ -51,7 +56,7 @@ export class MemoryPresenceStore implements PresenceStore {
 
   private updatePeakMetrics(): void {
     this.checkDayReset();
-    const count = this.presences.size;
+    const count = this.activePresences.size;
     const now = new Date();
     const hour = now.getHours();
 
@@ -71,39 +76,79 @@ export class MemoryPresenceStore implements PresenceStore {
   }
 
   setPresence(socketId: string, presence: LivePresence): void {
-    this.presences.set(socketId, presence);
+    const enrichedPresence: LivePresence = {
+      ...presence,
+      isOnline: true,
+      disconnectedAt: null,
+    };
+    this.activePresences.set(socketId, enrichedPresence);
+    this.sessionHistory.set(presence.userId, enrichedPresence);
     this.updatePeakMetrics();
   }
 
   updatePresence(socketId: string, updates: Partial<LivePresence>): void {
-    const existing = this.presences.get(socketId);
+    const existing = this.activePresences.get(socketId);
     if (existing) {
-      this.presences.set(socketId, {
+      const updated: LivePresence = {
         ...existing,
         ...updates,
+        isOnline: true,
         lastPingAt: updates.lastPingAt || new Date().toISOString(),
-      });
+      };
+      this.activePresences.set(socketId, updated);
+      this.sessionHistory.set(existing.userId, updated);
     }
     this.updatePeakMetrics();
   }
 
   removePresence(socketId: string): void {
-    this.presences.delete(socketId);
+    const existing = this.activePresences.get(socketId);
+    if (existing) {
+      const now = new Date();
+      const connTime = new Date(existing.connectedAt).getTime();
+      const durationSeconds = Math.max(0, Math.floor((now.getTime() - connTime) / 1000));
+
+      const disconnectedRecord: LivePresence = {
+        ...existing,
+        isOnline: false,
+        disconnectedAt: now.toISOString(),
+        currentAction: 'Disconnected (Went Offline)',
+        sessionDurationSeconds: durationSeconds,
+      };
+
+      this.sessionHistory.set(existing.userId, disconnectedRecord);
+      this.activePresences.delete(socketId);
+    }
   }
 
   getPresence(socketId: string): LivePresence | null {
-    return this.presences.get(socketId) || null;
+    return this.activePresences.get(socketId) || null;
   }
 
+  /**
+   * Returns all active online students + recently offline student sessions
+   * (Sorted with Active students first, then recently disconnected)
+   */
   getAllPresence(): LivePresence[] {
     const now = Date.now();
-    return Array.from(this.presences.values()).map((p) => {
+    const sessions = Array.from(this.sessionHistory.values()).map((p) => {
       const connTime = new Date(p.connectedAt).getTime();
+      const discTime = p.disconnectedAt ? new Date(p.disconnectedAt).getTime() : now;
       return {
         ...p,
-        sessionDurationSeconds: Math.max(0, Math.floor((now - connTime) / 1000)),
+        sessionDurationSeconds: Math.max(0, Math.floor((discTime - connTime) / 1000)),
       };
     });
+
+    sessions.sort((a, b) => {
+      if (a.isOnline && !b.isOnline) return -1;
+      if (!a.isOnline && b.isOnline) return 1;
+      const timeA = a.disconnectedAt ? new Date(a.disconnectedAt).getTime() : new Date(a.lastPingAt).getTime();
+      const timeB = b.disconnectedAt ? new Date(b.disconnectedAt).getTime() : new Date(b.lastPingAt).getTime();
+      return timeB - timeA;
+    });
+
+    return sessions;
   }
 
   getUserPresence(userId: string): LivePresence[] {
@@ -112,7 +157,7 @@ export class MemoryPresenceStore implements PresenceStore {
 
   getPeakStats(): { todayPeak: number; todayPeakTime: string; allTimePeak: number; allTimePeakDate: string; hourlyMax: number[] } {
     this.checkDayReset();
-    const current = this.presences.size;
+    const current = this.activePresences.size;
     return {
       todayPeak: Math.max(current, this.todayPeak),
       todayPeakTime: this.todayPeakTime,
@@ -123,7 +168,8 @@ export class MemoryPresenceStore implements PresenceStore {
   }
 
   clear(): void {
-    this.presences.clear();
+    this.activePresences.clear();
+    this.sessionHistory.clear();
     this.todayPeak = 0;
     this.allTimePeak = 0;
     this.hourlyMax = new Array(24).fill(0);

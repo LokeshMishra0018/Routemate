@@ -372,6 +372,9 @@ export interface LivePresenceUser {
   email: string;
   avatarUrl: string | null;
   college: string;
+  branch?: string;
+  verificationBadge?: 'verified' | 'id_pending' | 'unverified' | 'admin';
+  trustScore?: number;
   role: string;
   currentPath: string;
   currentAction: string;
@@ -379,6 +382,8 @@ export interface LivePresenceUser {
   browserInfo: string;
   connectedAt: string;
   lastPingAt: string;
+  disconnectedAt?: string | null;
+  isOnline: boolean;
   isIdle: boolean;
   sessionDurationSeconds: number;
 }
@@ -667,6 +672,16 @@ export interface LiveVisitor {
   totalEvents: number;
   isReturning: boolean;
   isActive: boolean;
+  isConverted?: boolean;
+  convertedUser?: {
+    userId: string;
+    name: string;
+    email: string;
+    college?: string;
+    branch?: string;
+    verificationBadge?: string;
+    trustScore?: number;
+  };
   timeline: VisitorTimelineEvent[];
 }
 

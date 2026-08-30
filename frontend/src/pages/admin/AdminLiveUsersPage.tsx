@@ -333,12 +333,24 @@ export const AdminLiveUsersPage: React.FC = () => {
                       <tr key={v.sessionId} className={`transition-colors ${v.isActive ? 'hover:bg-slate-800/40' : 'opacity-60 hover:opacity-80 bg-slate-950/20'}`}>
                         <td className="py-3.5 px-4">
                           <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-900/60 to-sky-900/60 border border-sky-500/40 flex items-center justify-center text-sky-200 font-black text-[11px] shadow-sm shadow-sky-500/10 shrink-0">
-                              #{v.visitorNumber || 1}
+                            <div
+                              className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-[11px] shrink-0 ${
+                                v.isConverted
+                                  ? 'bg-gradient-to-br from-amber-500/20 to-indigo-600/30 border border-amber-400/50 text-amber-300 shadow-glow'
+                                  : 'bg-gradient-to-br from-indigo-900/60 to-sky-900/60 border border-sky-500/40 text-sky-200 shadow-sm shadow-sky-500/10'
+                              }`}
+                            >
+                              {v.isConverted ? '🎓' : `#${v.visitorNumber || 1}`}
                             </div>
                             <div>
                               <div className="font-bold text-white flex items-center gap-2 text-xs">
-                                <span>{v.visitorName || `Visitor #${v.visitorNumber || 1}`}</span>
+                                <span>{v.convertedUser?.name || v.visitorName || `Visitor #${v.visitorNumber || 1}`}</span>
+                                {v.isConverted && (
+                                  <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/40 px-1.5 py-0.2 rounded-full">
+                                    <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                                    Converted
+                                  </span>
+                                )}
                                 {v.isActive ? (
                                   <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-1.5 py-0.2 rounded-full">
                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -351,7 +363,15 @@ export const AdminLiveUsersPage: React.FC = () => {
                                 )}
                               </div>
                               <div className="text-[10px] text-slate-400 font-mono">
-                                {v.sessionId.substring(0, 14)}... ({v.totalEvents} action{v.totalEvents > 1 ? 's' : ''})
+                                {v.isConverted && v.convertedUser?.email ? (
+                                  <span className="text-amber-300/80 font-sans">
+                                    Was Visitor #{v.visitorNumber} • {v.convertedUser.email}
+                                  </span>
+                                ) : (
+                                  <span>
+                                    {v.sessionId.substring(0, 14)}... ({v.totalEvents} action{v.totalEvents > 1 ? 's' : ''})
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -460,27 +480,48 @@ export const AdminLiveUsersPage: React.FC = () => {
                     <tr>
                       <td colSpan={7} className="py-10 text-center text-slate-500">
                         <Users className="w-8 h-8 mx-auto text-slate-600 mb-2 opacity-50" />
-                        No authenticated student sessions currently active.
+                        No authenticated student sessions logged yet.
                       </td>
                     </tr>
                   ) : (
                     filteredUsers.map((u) => (
-                      <tr key={u.socketId} className="hover:bg-slate-800/40 transition-colors">
+                      <tr
+                        key={u.socketId || u.userId}
+                        className={`transition-colors ${
+                          u.isOnline
+                            ? 'hover:bg-slate-800/40'
+                            : 'opacity-65 hover:opacity-85 bg-slate-950/20'
+                        }`}
+                      >
                         <td className="py-3.5 px-4">
                           <div className="flex items-center gap-2.5">
                             <div className="w-8 h-8 rounded-full bg-indigo-950 border border-indigo-500/40 flex items-center justify-center text-indigo-300 font-bold text-xs uppercase shrink-0">
-                              {u.name.charAt(0)}
+                              {u.avatarUrl ? (
+                                <img src={u.avatarUrl} alt={u.name} className="w-full h-full rounded-full object-cover" />
+                              ) : (
+                                u.name.charAt(0)
+                              )}
                             </div>
                             <div>
                               <div className="font-bold text-white flex items-center gap-1.5">
-                                {u.name}
+                                <span>{u.name}</span>
+                                {u.verificationBadge === 'verified' && (
+                                  <span title="Blue Tick Verified Student" className="text-sky-400 text-xs">
+                                    <ShieldCheck className="w-3.5 h-3.5 inline text-sky-400" />
+                                  </span>
+                                )}
                                 {u.role === 'admin' && (
                                   <Badge variant="warning" className="text-[9px] px-1 py-0">
                                     Admin
                                   </Badge>
                                 )}
                               </div>
-                              <div className="text-[11px] text-slate-400">{u.email}</div>
+                              <div className="text-[11px] text-slate-400 flex items-center gap-1">
+                                <span>{u.email}</span>
+                                {u.branch && (
+                                  <span className="text-[10px] text-slate-500 font-mono">• {u.branch}</span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </td>
@@ -493,7 +534,11 @@ export const AdminLiveUsersPage: React.FC = () => {
 
                         <td className="py-3.5 px-4">
                           <span className="font-semibold text-slate-200 flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                u.isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'
+                              }`}
+                            />
                             {u.currentAction}
                           </span>
                         </td>
@@ -519,14 +564,21 @@ export const AdminLiveUsersPage: React.FC = () => {
                         </td>
 
                         <td className="py-3.5 px-4">
-                          {u.isIdle ? (
-                            <Badge variant="neutral" className="text-[10px]">
-                              Idle (2m+)
-                            </Badge>
+                          {u.isOnline ? (
+                            u.isIdle ? (
+                              <Badge variant="neutral" className="text-[10px]">
+                                Idle (2m+)
+                              </Badge>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full shadow-sm">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                Active Now
+                              </span>
+                            )
                           ) : (
-                            <Badge variant="success" className="text-[10px]">
-                              🟢 Active
-                            </Badge>
+                            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400 bg-slate-800/80 border border-slate-700/60 px-2 py-0.5 rounded-full">
+                              Went Offline
+                            </span>
                           )}
                         </td>
 
@@ -535,8 +587,8 @@ export const AdminLiveUsersPage: React.FC = () => {
                             size="sm"
                             variant="outline"
                             onClick={() => setSelectedUser(u)}
-                            leftIcon={<Eye className="w-3 h-3" />}
-                            className="text-[11px] py-1 px-2.5"
+                            leftIcon={<Eye className="w-3 h-3 text-indigo-400" />}
+                            className="text-[11px] py-1 px-2.5 border-slate-700 hover:border-indigo-500"
                           >
                             Inspect
                           </Button>

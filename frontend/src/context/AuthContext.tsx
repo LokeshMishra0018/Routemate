@@ -21,6 +21,26 @@ interface AuthContextType {
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function notifyVisitorConverted(user: any, profile?: any) {
+  try {
+    const sid = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('routemate_vid') : null;
+    if (sid) {
+      apiClient.post('/telemetry/visitor-convert', {
+        sessionId: sid,
+        user: {
+          userId: user.id || user._id,
+          name: user.fullName || profile?.fullName || user.email?.split('@')[0] || 'Student',
+          email: user.email,
+          college: user.collegeName || profile?.collegeName,
+          branch: profile?.branch || profile?.department,
+          verificationBadge: user.verificationStatus || profile?.verificationStatus,
+          trustScore: user.trustScore || profile?.trustScore,
+        },
+      }).catch(() => {});
+    }
+  } catch {}
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -45,6 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
       setUser(userObj);
       setProfile(data.profile || null);
+      notifyVisitorConverted(userObj, data.profile);
     } catch {
       setUser(null);
       setProfile(null);
@@ -79,6 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setAuthToken(accessToken);
       setUser(loggedUser);
       setProfile(userProfile);
+      notifyVisitorConverted(loggedUser, userProfile);
       return loggedUser;
     } finally {
       setIsLoading(false);
@@ -113,6 +135,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
       setUser(userObj as any);
       setProfile(userProfile || loggedUser.profile || null);
+      notifyVisitorConverted(userObj, userProfile || loggedUser.profile);
       return loggedUser;
     } finally {
       setIsLoading(false);

@@ -46,6 +46,16 @@ export interface LiveVisitor {
   totalEvents: number;
   isReturning: boolean;
   isActive: boolean;
+  isConverted?: boolean;
+  convertedUser?: {
+    userId: string;
+    name: string;
+    email: string;
+    college?: string;
+    branch?: string;
+    verificationBadge?: string;
+    trustScore?: number;
+  };
   timeline: VisitorTimelineEvent[];
 }
 
@@ -371,6 +381,54 @@ export class VisitorTrackerStore {
   getVisitorTimeline(sessionId: string): VisitorTimelineEvent[] {
     const v = this.visitors.get(sessionId);
     return v ? v.timeline : [];
+  }
+
+  /**
+   * Stitches an anonymous visitor session with an authenticated student account on login/register
+   */
+  convertVisitor(
+    sessionId: string,
+    user: {
+      userId: string;
+      name: string;
+      email: string;
+      college?: string;
+      branch?: string;
+      verificationBadge?: string;
+      trustScore?: number;
+    }
+  ): LiveVisitor | null {
+    const existing = this.visitors.get(sessionId);
+    if (!existing) return null;
+
+    existing.isConverted = true;
+    existing.convertedUser = user;
+    existing.visitorName = `${user.name} (Visitor #${existing.visitorNumber})`;
+    existing.currentAction = `Authenticated & Logged In as ${user.name}`;
+
+    const convertEvent: VisitorTimelineEvent = {
+      id: `${Date.now()}-auth`,
+      action: `🎓 Converted & Authenticated as ${user.name} (${user.email})`,
+      section: 'Auth Conversion',
+      path: '/dashboard',
+      timestamp: new Date().toISOString(),
+    };
+
+    existing.timeline = [convertEvent, ...existing.timeline].slice(0, 30);
+
+    // Broadcast live conversion update to admin sockets
+    try {
+      const io = getIO();
+      if (io) {
+        io.to('room:admin:telemetry').emit('admin:visitor_activity', {
+          type: 'VISITOR_CONVERTED',
+          visitor: existing,
+          totalActiveVisitors: this.getActiveCount(),
+        });
+      }
+    } catch {}
+
+    return existing;
   }
 }
 
