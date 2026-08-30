@@ -717,7 +717,7 @@ export class AdminService {
     ]);
 
     const livePresences = presenceStore.getAllPresence();
-    const liveUsersOnline = livePresences.length;
+    const liveUsersOnline = livePresences.filter((u) => u.isOnline).length;
 
     // Real Registered Users & Verification Breakdown
     const totalUsers = usersWithProfiles.length;
@@ -1745,7 +1745,7 @@ export class AdminService {
 
         const deviceInfoStr = s.deviceInfo || 'Web Browser';
         const isGoogle = deviceInfoStr.toLowerCase().includes('google');
-        const isOnline = presenceStore.getUserPresence(uid).length > 0;
+        const isOnline = presenceStore.getUserPresence(uid).some((p) => p.isOnline);
 
         return {
           sessionId: s._id.toHexString(),
