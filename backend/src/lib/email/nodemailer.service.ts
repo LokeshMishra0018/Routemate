@@ -63,12 +63,12 @@ export class NodemailerEmailProvider implements EmailProvider {
 
   async verifyTransport(): Promise<boolean> {
     const env = getEnv();
-    if (env.GMAIL_CLIENT_ID && env.GMAIL_REFRESH_TOKEN) {
-      console.log('[EMAIL][INIT] ✅ Google Gmail REST API configured (HTTPS Port 443 - Cloud guaranteed).');
-      return true;
-    }
     if (env.RESEND_API_KEY) {
       console.log('[EMAIL][INIT] ✅ Resend HTTPS API configured (Port 443 - Cloud guaranteed).');
+      return true;
+    }
+    if (env.GMAIL_CLIENT_ID && env.GMAIL_REFRESH_TOKEN) {
+      console.log('[EMAIL][INIT] ✅ Google Gmail REST API configured (HTTPS Port 443 - Cloud guaranteed).');
       return true;
     }
     if (env.BREVO_API_KEY) {
@@ -170,7 +170,7 @@ export class NodemailerEmailProvider implements EmailProvider {
   async sendVerificationEmail(to: string, otp: string, name?: string): Promise<void> {
     const env = getEnv();
     const studentName = name || 'Student';
-    const fromAddress = env.SMTP_USER ? `RouteMate <${env.SMTP_USER.trim()}>` : env.EMAIL_FROM;
+    const fromAddress = env.SMTP_FROM || (env.SMTP_USER ? `RouteMate <${env.SMTP_USER.trim()}>` : env.EMAIL_FROM);
     const subject = `RouteMate Verification Code: ${otp}`;
     const textContent = `Hello ${studentName},\n\nYour RouteMate 6-digit verification code is: ${otp}\n\nThis code expires in 10 minutes.\n\nRouteMate Team`;
 
@@ -216,16 +216,14 @@ export class NodemailerEmailProvider implements EmailProvider {
       </html>
     `;
 
-    // 1. Try Google Gmail HTTPS REST API first (Guaranteed 100% on Render / Cloud)
+    // 1. Try HTTPS API Providers (Resend / Brevo) (guaranteed on Render / Cloud)
+    if (env.RESEND_API_KEY) {
+      const sent = await this.sendViaResend(to, subject, htmlContent, textContent);
+      if (sent) return;
+    }
     if (env.GMAIL_CLIENT_ID && env.GMAIL_REFRESH_TOKEN) {
       const { sendViaGmailRestApi } = await import('./gmail-api.service.js');
       const sent = await sendViaGmailRestApi({ to, subject, html: htmlContent, text: textContent });
-      if (sent) return;
-    }
-
-    // 2. Try HTTPS API Providers (Resend / Brevo) (guaranteed on Render)
-    if (env.RESEND_API_KEY) {
-      const sent = await this.sendViaResend(to, subject, htmlContent, textContent);
       if (sent) return;
     }
     if (env.BREVO_API_KEY) {
@@ -292,7 +290,7 @@ export class NodemailerEmailProvider implements EmailProvider {
   async sendPasswordResetEmail(to: string, otp: string, name?: string): Promise<void> {
     const env = getEnv();
     const studentName = name || 'Student';
-    const fromAddress = env.SMTP_USER ? `RouteMate <${env.SMTP_USER.trim()}>` : env.EMAIL_FROM;
+    const fromAddress = env.SMTP_FROM || (env.SMTP_USER ? `RouteMate <${env.SMTP_USER.trim()}>` : env.EMAIL_FROM);
     const subject = `RouteMate Password Reset Code: ${otp}`;
     const textContent = `Hello ${studentName},\n\nYour RouteMate 6-digit password reset code is: ${otp}\n\nThis code expires in 10 minutes.\n\nRouteMate Team`;
 
@@ -336,14 +334,13 @@ export class NodemailerEmailProvider implements EmailProvider {
       </html>
     `;
 
+    if (env.RESEND_API_KEY) {
+      const sent = await this.sendViaResend(to, subject, htmlContent, textContent);
+      if (sent) return;
+    }
     if (env.GMAIL_CLIENT_ID && env.GMAIL_REFRESH_TOKEN) {
       const { sendViaGmailRestApi } = await import('./gmail-api.service.js');
       const sent = await sendViaGmailRestApi({ to, subject, html: htmlContent, text: textContent });
-      if (sent) return;
-    }
-
-    if (env.RESEND_API_KEY) {
-      const sent = await this.sendViaResend(to, subject, htmlContent, textContent);
       if (sent) return;
     }
     if (env.BREVO_API_KEY) {
@@ -374,9 +371,57 @@ export class NodemailerEmailProvider implements EmailProvider {
 
   async sendVerificationStatusEmail(to: string, status: 'approved' | 'rejected', reason?: string): Promise<void> {
     const env = getEnv();
-    const fromAddress = env.SMTP_USER ? `RouteMate <${env.SMTP_USER.trim()}>` : env.EMAIL_FROM;
+    const fromAddress = env.SMTP_FROM || (env.SMTP_USER ? `RouteMate <${env.SMTP_USER.trim()}>` : env.EMAIL_FROM);
+    const subject = `RouteMate ID Verification ${status === 'approved' ? 'Approved ✅' : 'Rejected ❌'}`;
+    const textContent = `Your college ID verification has been ${status}.${reason ? ` Reason: ${reason}` : ''}`;
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0b0f19; color: #f1f5f9; margin: 0; padding: 20px; }
+          .card { max-width: 520px; margin: 0 auto; background-color: #131b2e; border: 1px solid #1e293b; border-radius: 16px; padding: 32px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+          .logo { text-align: center; margin-bottom: 24px; font-size: 24px; font-weight: 800; color: #6366f1; letter-spacing: -0.5px; }
+          .title { font-size: 20px; font-weight: 700; color: ${status === 'approved' ? '#10b981' : '#f43f5e'}; text-align: center; margin-bottom: 12px; }
+          .desc { font-size: 14px; color: #94a3b8; text-align: center; line-height: 1.6; margin-bottom: 20px; }
+          .reason { background-color: #1e293b; border-radius: 8px; padding: 16px; font-size: 14px; color: #e2e8f0; margin-bottom: 20px; text-align: center; }
+          .footer { font-size: 12px; color: #64748b; text-align: center; border-top: 1px solid #1e293b; padding-top: 20px; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="logo">🚗 RouteMate</div>
+          <div class="title">College ID Verification ${status === 'approved' ? 'Approved ✅' : 'Rejected ❌'}</div>
+          <div class="desc">
+            Your uploaded college ID verification request has been <strong>${status}</strong> by the administration.
+          </div>
+          ${reason ? `<div class="reason"><strong>Note:</strong> ${reason}</div>` : ''}
+          <div class="footer">
+            &copy; ${new Date().getFullYear()} RouteMate Campus Carpooling.
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
     lastSentEmails.push({ to, type: `VERIFICATION_${status.toUpperCase()}`, timestamp: new Date() });
     console.log(`[EMAIL][STATUS] From: ${fromAddress} | To: ${to} | Status: ${status} | Reason: ${reason || 'N/A'}`);
+
+    if (env.GMAIL_CLIENT_ID && env.GMAIL_REFRESH_TOKEN) {
+      const { sendViaGmailRestApi } = await import('./gmail-api.service.js');
+      const sent = await sendViaGmailRestApi({ to, subject, html: htmlContent, text: textContent });
+      if (sent) return;
+    }
+
+    if (env.RESEND_API_KEY) {
+      const sent = await this.sendViaResend(to, subject, htmlContent, textContent);
+      if (sent) return;
+    }
+    if (env.BREVO_API_KEY) {
+      const sent = await this.sendViaBrevo(to, subject, htmlContent, textContent);
+      if (sent) return;
+    }
 
     const transporter = await this.getTransporterAsync();
     if (!transporter) {
@@ -387,9 +432,11 @@ export class NodemailerEmailProvider implements EmailProvider {
       await transporter.sendMail({
         from: fromAddress,
         to,
-        subject: `RouteMate ID Verification ${status === 'approved' ? 'Approved ✅' : 'Rejected ❌'}`,
-        text: `Your college ID verification has been ${status}.${reason ? ` Reason: ${reason}` : ''}`,
+        subject,
+        text: textContent,
+        html: htmlContent,
       });
+      console.log(`[EMAIL][SUCCESS] Sent verification status email to ${to}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error('[EMAIL][ERROR] Failed to send verification status email:', msg);
