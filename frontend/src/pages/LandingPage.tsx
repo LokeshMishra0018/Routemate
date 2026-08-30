@@ -323,7 +323,7 @@ export const LandingPage: React.FC = () => {
 
             {/* Main Punchy Slogan Heading */}
             <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white leading-tight sm:leading-none">
-              Never Journey Alone. <br />
+              Never Travel Alone. <br />
               <span className="bg-gradient-to-r from-sky-400 via-indigo-300 to-emerald-400 bg-clip-text text-transparent">
                 Find Trusted College Mates
               </span>{' '}
