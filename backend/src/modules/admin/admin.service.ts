@@ -534,23 +534,24 @@ export class AdminService {
    */
   async getLivePresence() {
     const { presenceStore } = await import('../../lib/presence.js');
-    const liveUsers = presenceStore.getAllPresence();
+    const allUsers = presenceStore.getAllPresence();
+    const activeOnlineUsers = allUsers.filter((u) => u.isOnline);
 
     const pageDistribution: Record<string, number> = {};
     const deviceDistribution: Record<string, number> = { mobile: 0, desktop: 0, tablet: 0, unknown: 0 };
     let idleCount = 0;
 
-    for (const u of liveUsers) {
+    for (const u of activeOnlineUsers) {
       pageDistribution[u.currentPath] = (pageDistribution[u.currentPath] || 0) + 1;
       deviceDistribution[u.deviceCategory] = (deviceDistribution[u.deviceCategory] || 0) + 1;
       if (u.isIdle) idleCount += 1;
     }
 
     return {
-      totalOnline: liveUsers.length,
-      activeNow: liveUsers.length - idleCount,
+      totalOnline: activeOnlineUsers.length,
+      activeNow: Math.max(0, activeOnlineUsers.length - idleCount),
       idleCount,
-      users: liveUsers,
+      users: allUsers,
       pageDistribution,
       deviceDistribution,
       timestamp: new Date().toISOString(),

@@ -71,10 +71,7 @@ export interface LiveVisitorStats {
   timestamp: string;
 }
 
-/**
- * Utility to resolve IP address and derive realistic City/Region and ISP metadata
- */
-export function resolveGeoFromRequest(ip: string, headers: Record<string, any> = {}): {
+function resolveGeoFromRequest(ip: string, headers: Record<string, any> = {}): {
   city: string;
   region: string;
   country: string;
@@ -125,7 +122,7 @@ export function resolveGeoFromRequest(ip: string, headers: Record<string, any> =
 }
 
 /**
- * Thread-safe In-Memory Visitor Store with instant exit detection and sequential Option 1 numbering
+ * MongoDB-Persistent & In-Memory Visitor Store with real-time telemetry streaming
  */
 export class VisitorTrackerStore {
   private visitors: Map<string, LiveVisitor> = new Map();
@@ -141,17 +138,66 @@ export class VisitorTrackerStore {
       this.currentDay = today;
       this.dailyUniqueCount = 0;
       this.peakToday = 0;
-      this.nextVisitorNumber = 1;
+    }
+  }
+
+  /**
+   * Loads saved visitor sessions from MongoDB on backend boot / restart
+   */
+  async initFromDb(): Promise<void> {
+    try {
+      const db = getDb();
+      if (!db) return;
+
+      const docs = await db
+        .collection(COLLECTIONS.VISITOR_SESSIONS)
+        .find({})
+        .sort({ lastPingAt: -1 })
+        .limit(100)
+        .toArray();
+
+      for (const doc of docs) {
+        const v = doc as unknown as LiveVisitor;
+        if (v.sessionId && !this.visitors.has(v.sessionId)) {
+          const isRecentlyActive =
+            Date.now() - new Date(v.lastPingAt).getTime() < this.maxActiveSeconds * 1000;
+          this.visitors.set(v.sessionId, {
+            ...v,
+            isActive: isRecentlyActive,
+          });
+          if (v.visitorNumber >= this.nextVisitorNumber) {
+            this.nextVisitorNumber = v.visitorNumber + 1;
+          }
+        }
+      }
+      this.dailyUniqueCount = Math.max(this.dailyUniqueCount, this.visitors.size);
+    } catch {
+      // Ignore DB init errors on cold start
     }
   }
 
   private cleanStaleSessions(): void {
-    const cutoff = Date.now() - 30 * 60 * 1000; // Keep in history table for 30m
+    const cutoff = Date.now() - 30 * 60 * 1000; // Keep in memory table for 30m
     for (const [id, v] of this.visitors.entries()) {
       if (new Date(v.lastPingAt).getTime() < cutoff) {
         this.visitors.delete(id);
       }
     }
+  }
+
+  private persistSessionAsync(visitor: LiveVisitor): void {
+    try {
+      const db = getDb();
+      if (db) {
+        db.collection(COLLECTIONS.VISITOR_SESSIONS)
+          .updateOne(
+            { sessionId: visitor.sessionId },
+            { $set: { ...visitor, updatedAt: new Date() } },
+            { upsert: true }
+          )
+          .catch(() => {});
+      }
+    } catch {}
   }
 
   recordPing(payload: VisitorPingPayload, ip: string, headers: Record<string, any> = {}): LiveVisitor {
@@ -168,6 +214,8 @@ export class VisitorTrackerStore {
       existing.isActive = false;
       existing.lastPingAt = nowIso;
       existing.currentAction = 'Left Website (Session Ended)';
+
+      this.persistSessionAsync(existing);
 
       // Notify socket listeners immediately
       try {
@@ -250,6 +298,7 @@ export class VisitorTrackerStore {
     }
 
     this.visitors.set(payload.sessionId, visitor);
+    this.persistSessionAsync(visitor);
 
     const activeCount = this.getActiveCount();
     if (activeCount > this.peakToday) {
@@ -276,36 +325,11 @@ export class VisitorTrackerStore {
             sessionDurationSeconds: visitor.sessionDurationSeconds,
             lastPingAt: visitor.lastPingAt,
             isActive: visitor.isActive,
+            isConverted: visitor.isConverted,
+            convertedUser: visitor.convertedUser,
           },
           totalActiveVisitors: activeCount,
         });
-      }
-    } catch {}
-
-    // Async Mongo log
-    try {
-      const db = getDb();
-      if (db) {
-        db.collection(COLLECTIONS.ACTIVITY_LOGS).insertOne({
-          id: `visitor-${visitor.sessionId}-${Date.now()}`,
-          userId: `anonymous:${visitor.visitorName}`,
-          userName: `${visitor.visitorName} (${visitor.city})`,
-          eventType: 'TRIP_VIEWED',
-          description: `${visitor.visitorName} from ${visitor.city} (${visitor.deviceCategory}): ${visitor.currentAction}`,
-          metadata: {
-            isVisitor: true,
-            visitorNumber: visitor.visitorNumber,
-            sessionId: visitor.sessionId,
-            city: visitor.city,
-            region: visitor.region,
-            referrer: visitor.referrer,
-            deviceCategory: visitor.deviceCategory,
-            browserInfo: visitor.browserInfo,
-            currentPath: visitor.currentPath,
-            currentSection: visitor.currentSection,
-          },
-          createdAt: new Date(),
-        }).catch(() => {});
       }
     } catch {}
 
@@ -415,6 +439,7 @@ export class VisitorTrackerStore {
     };
 
     existing.timeline = [convertEvent, ...existing.timeline].slice(0, 30);
+    this.persistSessionAsync(existing);
 
     // Broadcast live conversion update to admin sockets
     try {

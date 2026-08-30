@@ -174,7 +174,7 @@ export const AdminLiveUsersPage: React.FC = () => {
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
             <span className="text-xs font-bold text-emerald-300">
               {totalLiveTraffic} Total Live Traffic ({visitorsData?.totalActiveVisitors || 0} Visitors •{' '}
-              {studentsData?.activeNow || 0} Students)
+              {studentsData?.totalOnline || 0} Students)
             </span>
           </div>
         </div>
@@ -201,9 +201,14 @@ export const AdminLiveUsersPage: React.FC = () => {
           <span className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
             <Users className="w-4 h-4 text-emerald-400" /> Logged-In Students
           </span>
-          <div className="text-2xl font-black text-emerald-300">{studentsData?.activeNow || 0}</div>
+          <div className="text-2xl font-black text-emerald-300 flex items-center gap-2">
+            {studentsData?.totalOnline || 0}
+            <span className="text-xs font-semibold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+              Live
+            </span>
+          </div>
           <span className="text-[11px] text-slate-400">
-            {studentsData?.totalOnline || 0} authenticated socket sessions
+            {liveUsers.length} total session{liveUsers.length !== 1 ? 's' : ''} logged today
           </span>
         </Card>
 

@@ -1,3 +1,6 @@
+import { getDb } from '../db/mongo.js';
+import { COLLECTIONS } from '../db/collections.js';
+
 export interface LivePresence {
   socketId: string;
   userId: string;
@@ -32,11 +35,11 @@ export interface PresenceStore {
 }
 
 /**
- * In-memory thread-safe Presence Store with student session history retention.
+ * MongoDB-Persistent & In-Memory Presence Store with student session history retention.
  */
 export class MemoryPresenceStore implements PresenceStore {
   private activePresences: Map<string, LivePresence> = new Map();
-  private sessionHistory: Map<string, LivePresence> = new Map(); // Keyed by userId/socketId to preserve disconnected sessions
+  private sessionHistory: Map<string, LivePresence> = new Map(); // Keyed by userId
   private todayPeak = 0;
   private todayPeakTime = 'Live Now';
   private allTimePeak = 0;
@@ -75,6 +78,50 @@ export class MemoryPresenceStore implements PresenceStore {
     }
   }
 
+  /**
+   * Loads saved student sessions from MongoDB on backend boot / restart
+   */
+  async initFromDb(): Promise<void> {
+    try {
+      const db = getDb();
+      if (!db) return;
+
+      const docs = await db
+        .collection(COLLECTIONS.STUDENT_SESSIONS)
+        .find({})
+        .sort({ lastPingAt: -1 })
+        .limit(100)
+        .toArray();
+
+      for (const doc of docs) {
+        const p = doc as unknown as LivePresence;
+        if (p.userId && !this.sessionHistory.has(p.userId)) {
+          this.sessionHistory.set(p.userId, {
+            ...p,
+            isOnline: false, // Disconnected until active socket connects
+          });
+        }
+      }
+    } catch {
+      // Ignore DB init errors on cold start
+    }
+  }
+
+  private persistSessionAsync(presence: LivePresence): void {
+    try {
+      const db = getDb();
+      if (db) {
+        db.collection(COLLECTIONS.STUDENT_SESSIONS)
+          .updateOne(
+            { userId: presence.userId },
+            { $set: { ...presence, updatedAt: new Date() } },
+            { upsert: true }
+          )
+          .catch(() => {});
+      }
+    } catch {}
+  }
+
   setPresence(socketId: string, presence: LivePresence): void {
     const enrichedPresence: LivePresence = {
       ...presence,
@@ -83,6 +130,7 @@ export class MemoryPresenceStore implements PresenceStore {
     };
     this.activePresences.set(socketId, enrichedPresence);
     this.sessionHistory.set(presence.userId, enrichedPresence);
+    this.persistSessionAsync(enrichedPresence);
     this.updatePeakMetrics();
   }
 
@@ -97,6 +145,7 @@ export class MemoryPresenceStore implements PresenceStore {
       };
       this.activePresences.set(socketId, updated);
       this.sessionHistory.set(existing.userId, updated);
+      this.persistSessionAsync(updated);
     }
     this.updatePeakMetrics();
   }
@@ -118,6 +167,7 @@ export class MemoryPresenceStore implements PresenceStore {
 
       this.sessionHistory.set(existing.userId, disconnectedRecord);
       this.activePresences.delete(socketId);
+      this.persistSessionAsync(disconnectedRecord);
     }
   }
 

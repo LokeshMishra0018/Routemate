@@ -27,6 +27,8 @@ export const COLLECTIONS = {
   ACTIVITY_LOGS: 'activityLogs',
   SEARCH_LOGS: 'searchLogs',
   SYSTEM_SETTINGS: 'systemSettings',
+  VISITOR_SESSIONS: 'visitorSessions',
+  STUDENT_SESSIONS: 'studentSessions',
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];

@@ -43,6 +43,13 @@ async function startServer(): Promise<void> {
     logger.info('Verifying database indexes and seeding initial collections...');
     const seedResult = await seedDatabase(db);
     logger.info({ message: seedResult.message }, 'Database initialization complete');
+
+    // 3. Restore persisted live sessions & telemetry from database
+    const { visitorTrackerStore } = await import('./lib/visitorTracker.js');
+    const { presenceStore } = await import('./lib/presence.js');
+    await visitorTrackerStore.initFromDb();
+    await presenceStore.initFromDb();
+    logger.info('Restored active visitor and student telemetry from database');
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     logger.warn(
