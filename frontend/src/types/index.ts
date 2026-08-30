@@ -645,6 +645,8 @@ export interface VisitorTimelineEvent {
 }
 
 export interface LiveVisitor {
+  visitorNumber: number;
+  visitorName: string;
   sessionId: string;
   ip: string;
   city: string;
@@ -664,6 +666,7 @@ export interface LiveVisitor {
   sessionDurationSeconds: number;
   totalEvents: number;
   isReturning: boolean;
+  isActive: boolean;
   timeline: VisitorTimelineEvent[];
 }
 

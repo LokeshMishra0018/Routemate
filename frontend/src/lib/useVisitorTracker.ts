@@ -56,11 +56,19 @@ function getBrowserInfo(): string {
   return 'Browser';
 }
 
-async function sendVisitorPing(payload: {
-  currentPath: string;
-  currentAction: string;
-  currentSection?: string;
-}) {
+function getBackendPingUrl(): string {
+  const envUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || '/api/v1';
+  return `${envUrl.replace(/\/$/, '')}/telemetry/visitor-ping`;
+}
+
+function sendVisitorPing(
+  payload: {
+    currentPath: string;
+    currentAction: string;
+    currentSection?: string;
+  },
+  isLeaving: boolean = false
+) {
   try {
     const sessionId = getSessionId();
     const referrer = getAcquisitionSource();
@@ -77,12 +85,31 @@ async function sendVisitorPing(payload: {
       browserInfo,
       screenResolution,
       language,
+      isLeaving,
     };
 
-    // Use apiClient so that VITE_API_URL (production backend domain) is respected
-    apiClient.post('/telemetry/visitor-ping', fullPayload).catch(() => {
-      // Silently ignore ping errors
-    });
+    const targetUrl = getBackendPingUrl();
+
+    // If leaving the site on tab close, use beacon or keepalive for guaranteed zero-delay delivery
+    if (isLeaving) {
+      const blob = new Blob([JSON.stringify(fullPayload)], { type: 'application/json' });
+      if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+        navigator.sendBeacon(targetUrl, blob);
+        return;
+      }
+      if (typeof fetch !== 'undefined') {
+        fetch(targetUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(fullPayload),
+          keepalive: true,
+        }).catch(() => {});
+        return;
+      }
+    }
+
+    // Normal active ping via apiClient
+    apiClient.post('/telemetry/visitor-ping', fullPayload).catch(() => {});
   } catch {
     // Fail completely silently
   }
@@ -90,7 +117,7 @@ async function sendVisitorPing(payload: {
 
 /**
  * Invisible, zero-permission telemetry hook for overview & public pages.
- * Detects visitor device, city/region via IP, campaign referrer, and live section scrolling.
+ * Pings every 8 seconds while visible and detects instant tab-close exits.
  */
 export function useVisitorTracker(pageName: string = 'Overview Page') {
   const location = useLocation();
@@ -104,7 +131,7 @@ export function useVisitorTracker(pageName: string = 'Overview Page') {
       currentSection: 'Hero Banner',
     });
 
-    // 2. Set up IntersectionObserver on landing page sections for live reading action detection
+    // 2. Set up IntersectionObserver on landing page sections
     const sectionMap: Record<string, string> = {
       modes: 'Exploring Multi-Modal Commutes (Metro, Train, Cab, Bus)',
       badges: 'Reviewing 4-Tier Student Trust Badges',
@@ -138,20 +165,67 @@ export function useVisitorTracker(pageName: string = 'Overview Page') {
       if (el) observer.observe(el);
     });
 
-    // 3. Periodic Keepalive heartbeat while active (every 25 seconds)
+    // 3. 8-Second Keepalive heartbeat while active
     const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         sendVisitorPing({
           currentPath: location.pathname,
           currentAction: `Active in ${lastSectionRef.current || pageName}`,
           currentSection: lastSectionRef.current,
         });
       }
-    }, 25000);
+    }, 8000);
+
+    // 4. Instant Tab Close & App Switch Exit Detection
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        sendVisitorPing(
+          {
+            currentPath: location.pathname,
+            currentAction: 'Left Tab / App Switched',
+            currentSection: lastSectionRef.current,
+          },
+          true
+        );
+      } else if (document.visibilityState === 'visible') {
+        sendVisitorPing({
+          currentPath: location.pathname,
+          currentAction: `Returned to ${lastSectionRef.current || pageName}`,
+          currentSection: lastSectionRef.current,
+        });
+      }
+    };
+
+    const handlePageHide = () => {
+      sendVisitorPing(
+        {
+          currentPath: location.pathname,
+          currentAction: 'Closed Page',
+          currentSection: lastSectionRef.current,
+        },
+        true
+      );
+    };
+
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener('beforeunload', handlePageHide);
 
     return () => {
       observer.disconnect();
       clearInterval(interval);
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('beforeunload', handlePageHide);
+      // Fire final leave beacon on unmount
+      sendVisitorPing(
+        {
+          currentPath: location.pathname,
+          currentAction: 'Navigated Away',
+          currentSection: lastSectionRef.current,
+        },
+        true
+      );
     };
   }, [location.pathname, pageName]);
 }

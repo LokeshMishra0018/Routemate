@@ -330,18 +330,28 @@ export const AdminLiveUsersPage: React.FC = () => {
                     </tr>
                   ) : (
                     filteredVisitors.map((v) => (
-                      <tr key={v.sessionId} className="hover:bg-slate-800/40 transition-colors">
+                      <tr key={v.sessionId} className={`transition-colors ${v.isActive ? 'hover:bg-slate-800/40' : 'opacity-60 hover:opacity-80 bg-slate-950/20'}`}>
                         <td className="py-3.5 px-4">
                           <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-full bg-sky-950 border border-sky-500/40 flex items-center justify-center text-sky-300 font-bold text-xs uppercase shrink-0">
-                              🌐
+                            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-900/60 to-sky-900/60 border border-sky-500/40 flex items-center justify-center text-sky-200 font-black text-[11px] shadow-sm shadow-sky-500/10 shrink-0">
+                              #{v.visitorNumber || 1}
                             </div>
                             <div>
-                              <div className="font-bold text-white flex items-center gap-1.5 font-mono text-[11px]">
-                                {v.sessionId.substring(0, 14)}...
+                              <div className="font-bold text-white flex items-center gap-2 text-xs">
+                                <span>{v.visitorName || `Visitor #${v.visitorNumber || 1}`}</span>
+                                {v.isActive ? (
+                                  <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-1.5 py-0.2 rounded-full">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                    Active Now
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] font-semibold text-slate-500 bg-slate-800/60 border border-slate-700/60 px-1.5 py-0.2 rounded-full">
+                                    Left site
+                                  </span>
+                                )}
                               </div>
-                              <div className="text-[10px] text-slate-400">
-                                {v.totalEvents} interaction{v.totalEvents > 1 ? 's' : ''}
+                              <div className="text-[10px] text-slate-400 font-mono">
+                                {v.sessionId.substring(0, 14)}... ({v.totalEvents} action{v.totalEvents > 1 ? 's' : ''})
                               </div>
                             </div>
                           </div>
@@ -547,14 +557,19 @@ export const AdminLiveUsersPage: React.FC = () => {
           <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150 max-h-[85vh] flex flex-col">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-full bg-sky-950 border border-sky-500/40 flex items-center justify-center text-sky-300 font-bold text-sm">
-                  🌐
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-900/60 to-sky-900/60 border border-sky-500/40 flex items-center justify-center text-sky-200 font-black text-xs shadow-md shrink-0">
+                  #{selectedVisitor.visitorNumber || 1}
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    Visitor Session <Badge variant="brand">{selectedVisitor.city}, {selectedVisitor.region}</Badge>
+                    {selectedVisitor.visitorName || `Visitor #${selectedVisitor.visitorNumber || 1}`}
+                    <Badge variant={selectedVisitor.isActive ? 'brand' : 'neutral'}>
+                      {selectedVisitor.isActive ? '🟢 Active Session' : '⚪ Left Site'}
+                    </Badge>
                   </h3>
-                  <p className="text-xs text-slate-400 font-mono">ID: {selectedVisitor.sessionId}</p>
+                  <p className="text-xs text-slate-400 font-mono">
+                    {selectedVisitor.city}, {selectedVisitor.region} • Session: {selectedVisitor.sessionId.substring(0, 16)}...
+                  </p>
                 </div>
               </div>
               <button

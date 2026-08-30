@@ -12,6 +12,7 @@ export interface VisitorPingPayload {
   browserInfo?: string;
   screenResolution?: string;
   language?: string;
+  isLeaving?: boolean;
 }
 
 export interface VisitorTimelineEvent {
@@ -23,6 +24,8 @@ export interface VisitorTimelineEvent {
 }
 
 export interface LiveVisitor {
+  visitorNumber: number;
+  visitorName: string;
   sessionId: string;
   ip: string;
   city: string;
@@ -42,6 +45,7 @@ export interface LiveVisitor {
   sessionDurationSeconds: number;
   totalEvents: number;
   isReturning: boolean;
+  isActive: boolean;
   timeline: VisitorTimelineEvent[];
 }
 
@@ -59,7 +63,6 @@ export interface LiveVisitorStats {
 
 /**
  * Utility to resolve IP address and derive realistic City/Region and ISP metadata
- * using standard CDN/Proxy headers (Cloudflare, X-Forwarded-For) or campus IP heuristics.
  */
 export function resolveGeoFromRequest(ip: string, headers: Record<string, any> = {}): {
   city: string;
@@ -67,7 +70,6 @@ export function resolveGeoFromRequest(ip: string, headers: Record<string, any> =
   country: string;
   isp: string;
 } {
-  // 1. Check Cloudflare / CDN headers if available
   const cfCity = headers['cf-ipcity'];
   const cfRegion = headers['cf-region'] || headers['cf-region-code'];
   const cfCountry = headers['cf-ipcountry'] || 'India';
@@ -82,10 +84,8 @@ export function resolveGeoFromRequest(ip: string, headers: Record<string, any> =
     };
   }
 
-  // 2. Normalize IP
   const cleanIp = (ip || '').replace('::ffff:', '').trim();
 
-  // Localhost / internal development test IPs
   if (!cleanIp || cleanIp === '127.0.0.1' || cleanIp === '::1' || cleanIp.startsWith('192.168.') || cleanIp.startsWith('10.')) {
     return {
       city: 'Ghaziabad',
@@ -95,7 +95,6 @@ export function resolveGeoFromRequest(ip: string, headers: Record<string, any> =
     };
   }
 
-  // Common Indian ISP / Campus IP pattern inference fallback
   const lastOctet = parseInt(cleanIp.split('.')[3] || '1', 10);
   const cityChoices = [
     { city: 'Ghaziabad', region: 'Uttar Pradesh', isp: 'Jio 5G Network' },
@@ -116,12 +115,13 @@ export function resolveGeoFromRequest(ip: string, headers: Record<string, any> =
 }
 
 /**
- * Thread-safe In-Memory Visitor Store with bounded retention and live WebSocket dispatch
+ * Thread-safe In-Memory Visitor Store with instant exit detection and sequential Option 1 numbering
  */
 export class VisitorTrackerStore {
   private visitors: Map<string, LiveVisitor> = new Map();
-  private maxActiveMinutes = 15;
+  private maxActiveSeconds = 18; // Strict active window for 8s heartbeats
   private peakToday = 0;
+  private nextVisitorNumber = 1;
   private dailyUniqueCount = 0;
   private currentDay = new Date().toDateString();
 
@@ -131,11 +131,12 @@ export class VisitorTrackerStore {
       this.currentDay = today;
       this.dailyUniqueCount = 0;
       this.peakToday = 0;
+      this.nextVisitorNumber = 1;
     }
   }
 
   private cleanStaleSessions(): void {
-    const cutoff = Date.now() - this.maxActiveMinutes * 60 * 1000;
+    const cutoff = Date.now() - 30 * 60 * 1000; // Keep in history table for 30m
     for (const [id, v] of this.visitors.entries()) {
       if (new Date(v.lastPingAt).getTime() < cutoff) {
         this.visitors.delete(id);
@@ -150,8 +151,28 @@ export class VisitorTrackerStore {
     const now = new Date();
     const nowIso = now.toISOString();
     const existing = this.visitors.get(payload.sessionId);
-
     const geo = resolveGeoFromRequest(ip, headers);
+
+    // If explicit leave beacon
+    if (payload.isLeaving && existing) {
+      existing.isActive = false;
+      existing.lastPingAt = nowIso;
+      existing.currentAction = 'Left Website (Session Ended)';
+
+      // Notify socket listeners immediately
+      try {
+        const io = getIO();
+        if (io) {
+          io.to('room:admin:telemetry').emit('admin:visitor_activity', {
+            type: 'VISITOR_DISCONNECTED',
+            visitor: existing,
+            totalActiveVisitors: this.getActiveCount(),
+          });
+        }
+      } catch {}
+
+      return existing;
+    }
 
     const eventItem: VisitorTimelineEvent = {
       id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -166,7 +187,6 @@ export class VisitorTrackerStore {
     if (existing) {
       const firstSeen = new Date(existing.firstSeenAt).getTime();
       const durationSeconds = Math.max(0, Math.floor((now.getTime() - firstSeen) / 1000));
-
       const updatedTimeline = [eventItem, ...existing.timeline].slice(0, 30);
 
       visitor = {
@@ -185,12 +205,16 @@ export class VisitorTrackerStore {
         lastPingAt: nowIso,
         sessionDurationSeconds: durationSeconds,
         totalEvents: existing.totalEvents + 1,
+        isActive: true,
         timeline: updatedTimeline,
       };
     } else {
+      const vNum = this.nextVisitorNumber++;
       this.dailyUniqueCount += 1;
 
       visitor = {
+        visitorNumber: vNum,
+        visitorName: `Visitor #${vNum}`,
         sessionId: payload.sessionId,
         ip,
         city: geo.city,
@@ -210,23 +234,27 @@ export class VisitorTrackerStore {
         sessionDurationSeconds: 0,
         totalEvents: 1,
         isReturning: false,
+        isActive: true,
         timeline: [eventItem],
       };
     }
 
     this.visitors.set(payload.sessionId, visitor);
 
-    if (this.visitors.size > this.peakToday) {
-      this.peakToday = this.visitors.size;
+    const activeCount = this.getActiveCount();
+    if (activeCount > this.peakToday) {
+      this.peakToday = activeCount;
     }
 
-    // Broadcast live telemetry update to connected admin/moderator sockets
+    // Broadcast live telemetry update to admin sockets
     try {
       const io = getIO();
       if (io) {
         io.to('room:admin:telemetry').emit('admin:visitor_activity', {
           type: existing ? 'VISITOR_HEARTBEAT' : 'NEW_VISITOR_LANDED',
           visitor: {
+            visitorNumber: visitor.visitorNumber,
+            visitorName: visitor.visitorName,
             sessionId: visitor.sessionId,
             city: visitor.city,
             region: visitor.region,
@@ -237,26 +265,26 @@ export class VisitorTrackerStore {
             referrer: visitor.referrer,
             sessionDurationSeconds: visitor.sessionDurationSeconds,
             lastPingAt: visitor.lastPingAt,
+            isActive: visitor.isActive,
           },
-          totalActiveVisitors: this.visitors.size,
+          totalActiveVisitors: activeCount,
         });
       }
-    } catch {
-      // Ignore socket emit errors during startup
-    }
+    } catch {}
 
-    // Async MongoDB persistence for visitor activity logs (non-blocking)
+    // Async Mongo log
     try {
       const db = getDb();
       if (db) {
         db.collection(COLLECTIONS.ACTIVITY_LOGS).insertOne({
           id: `visitor-${visitor.sessionId}-${Date.now()}`,
-          userId: `anonymous:${visitor.sessionId.substring(0, 10)}`,
-          userName: `Visitor (${visitor.city})`,
+          userId: `anonymous:${visitor.visitorName}`,
+          userName: `${visitor.visitorName} (${visitor.city})`,
           eventType: 'TRIP_VIEWED',
-          description: `Visitor from ${visitor.city} (${visitor.deviceCategory}): ${visitor.currentAction}`,
+          description: `${visitor.visitorName} from ${visitor.city} (${visitor.deviceCategory}): ${visitor.currentAction}`,
           metadata: {
             isVisitor: true,
+            visitorNumber: visitor.visitorNumber,
             sessionId: visitor.sessionId,
             city: visitor.city,
             region: visitor.region,
@@ -269,11 +297,20 @@ export class VisitorTrackerStore {
           createdAt: new Date(),
         }).catch(() => {});
       }
-    } catch {
-      // Ignore DB write errors
-    }
+    } catch {}
 
     return visitor;
+  }
+
+  private getActiveCount(): number {
+    const activeCutoff = Date.now() - this.maxActiveSeconds * 1000;
+    let count = 0;
+    for (const v of this.visitors.values()) {
+      if (v.isActive && new Date(v.lastPingAt).getTime() >= activeCutoff) {
+        count++;
+      }
+    }
+    return count;
   }
 
   getLiveVisitors(): LiveVisitorStats {
@@ -281,36 +318,47 @@ export class VisitorTrackerStore {
     this.cleanStaleSessions();
 
     const now = Date.now();
+    const activeCutoff = now - this.maxActiveSeconds * 1000;
+
     const visitorsList = Array.from(this.visitors.values()).map((v) => {
       const firstSeen = new Date(v.firstSeenAt).getTime();
+      const isStillActive = v.isActive && new Date(v.lastPingAt).getTime() >= activeCutoff;
       return {
         ...v,
+        isActive: isStillActive,
         sessionDurationSeconds: Math.max(0, Math.floor((now - firstSeen) / 1000)),
       };
     });
 
-    // Sort: most recently active visitors first
-    visitorsList.sort((a, b) => new Date(b.lastPingAt).getTime() - new Date(a.lastPingAt).getTime());
+    // Sort: Active visitors first, then most recently active
+    visitorsList.sort((a, b) => {
+      if (a.isActive && !b.isActive) return -1;
+      if (!a.isActive && b.isActive) return 1;
+      return new Date(b.lastPingAt).getTime() - new Date(a.lastPingAt).getTime();
+    });
 
-    // Compute distribution aggregates
     const cityDistribution: Record<string, number> = {};
     const deviceDistribution: Record<string, number> = {};
     const referrerDistribution: Record<string, number> = {};
     const sectionDistribution: Record<string, number> = {};
 
+    let activeCount = 0;
     for (const v of visitorsList) {
-      cityDistribution[v.city] = (cityDistribution[v.city] || 0) + 1;
-      deviceDistribution[v.deviceCategory] = (deviceDistribution[v.deviceCategory] || 0) + 1;
-      referrerDistribution[v.referrer] = (referrerDistribution[v.referrer] || 0) + 1;
-      if (v.currentSection) {
-        sectionDistribution[v.currentSection] = (sectionDistribution[v.currentSection] || 0) + 1;
+      if (v.isActive) {
+        activeCount++;
+        cityDistribution[v.city] = (cityDistribution[v.city] || 0) + 1;
+        deviceDistribution[v.deviceCategory] = (deviceDistribution[v.deviceCategory] || 0) + 1;
+        referrerDistribution[v.referrer] = (referrerDistribution[v.referrer] || 0) + 1;
+        if (v.currentSection) {
+          sectionDistribution[v.currentSection] = (sectionDistribution[v.currentSection] || 0) + 1;
+        }
       }
     }
 
     return {
-      totalActiveVisitors: visitorsList.length,
+      totalActiveVisitors: activeCount,
       totalVisitorsToday: Math.max(this.dailyUniqueCount, visitorsList.length),
-      peakVisitorsToday: this.peakToday,
+      peakVisitorsToday: Math.max(this.peakToday, activeCount),
       visitors: visitorsList,
       cityDistribution,
       deviceDistribution,

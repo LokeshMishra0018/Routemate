@@ -23,6 +23,7 @@ export const telemetryRoutes: FastifyPluginAsync = async (app: FastifyInstance):
       browserInfo: body.browserInfo || 'Browser',
       screenResolution: body.screenResolution,
       language: body.language,
+      isLeaving: body.isLeaving,
     };
 
     const clientIp =
