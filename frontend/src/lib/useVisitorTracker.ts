@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
+import { apiClient } from '../services/api.client';
 
 function getSessionId(): string {
   try {
@@ -65,8 +66,8 @@ async function sendVisitorPing(payload: {
     const referrer = getAcquisitionSource();
     const deviceCategory = getDeviceCategory();
     const browserInfo = getBrowserInfo();
-    const screenResolution = `${window.screen.width}x${window.screen.height}`;
-    const language = navigator.language || 'en';
+    const screenResolution = typeof window !== 'undefined' ? `${window.screen.width}x${window.screen.height}` : 'Responsive';
+    const language = typeof navigator !== 'undefined' ? navigator.language || 'en' : 'en';
 
     const fullPayload = {
       sessionId,
@@ -78,19 +79,10 @@ async function sendVisitorPing(payload: {
       language,
     };
 
-    const apiUrl = '/api/v1/telemetry/visitor-ping';
-
-    // Silent non-blocking HTTP request
-    if (typeof fetch !== 'undefined') {
-      fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(fullPayload),
-        keepalive: true,
-      }).catch(() => {
-        // Silently ignore ping errors
-      });
-    }
+    // Use apiClient so that VITE_API_URL (production backend domain) is respected
+    apiClient.post('/telemetry/visitor-ping', fullPayload).catch(() => {
+      // Silently ignore ping errors
+    });
   } catch {
     // Fail completely silently
   }
