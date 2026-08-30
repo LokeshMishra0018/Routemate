@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/Button';
+import { useVisitorTracker } from '../lib/useVisitorTracker';
 
 // Multi-Modal Transit Scenarios Data
 const TRANSIT_MODES = [
@@ -212,6 +213,9 @@ const VERIFICATION_BADGES = [
 export const LandingPage: React.FC = () => {
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
+
+  // Invisible, zero-permission live traffic & section scroll telemetry
+  useVisitorTracker('Overview Landing Page');
 
   const [activeTransitMode, setActiveTransitMode] = useState<string>('metro');
   const [selectedBadge, setSelectedBadge] = useState<string>('verified');

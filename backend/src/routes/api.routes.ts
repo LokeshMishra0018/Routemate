@@ -12,6 +12,7 @@ import { messagingRoutes } from '../modules/messaging/messaging.routes.js';
 import { notificationsRoutes } from '../modules/notifications/notifications.routes.js';
 import { reviewsRoutes } from '../modules/reviews/reviews.routes.js';
 import { safetyRoutes } from '../modules/safety/safety.routes.js';
+import { telemetryRoutes } from '../modules/telemetry/telemetry.routes.js';
 import { createSuccessResponse } from '../utils/response.js';
 
 export const apiV1Routes: FastifyPluginAsync = async (app: FastifyInstance): Promise<void> => {
@@ -43,4 +44,5 @@ export const apiV1Routes: FastifyPluginAsync = async (app: FastifyInstance): Pro
   await app.register(notificationsRoutes, { prefix: '/notifications' });
   await app.register(reviewsRoutes, { prefix: '/reviews' });
   await app.register(safetyRoutes, { prefix: '/safety' });
+  await app.register(telemetryRoutes, { prefix: '/telemetry' });
 };

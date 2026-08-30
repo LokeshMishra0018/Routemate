@@ -558,6 +558,22 @@ export class AdminService {
   }
 
   /**
+   * Live Public & Overview Visitors Telemetry Radar
+   */
+  async getLiveVisitors() {
+    const { visitorTrackerStore } = await import('../../lib/visitorTracker.js');
+    return visitorTrackerStore.getLiveVisitors();
+  }
+
+  /**
+   * Get specific visitor action timeline
+   */
+  async getVisitorTimeline(sessionId: string) {
+    const { visitorTrackerStore } = await import('../../lib/visitorTracker.js');
+    return visitorTrackerStore.getVisitorTimeline(sessionId);
+  }
+
+  /**
    * Live Platform Event Stream (Ring Buffer + Activity Logs)
    */
   async getLiveEventStream(limit = 50) {

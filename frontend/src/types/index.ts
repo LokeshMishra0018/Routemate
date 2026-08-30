@@ -636,3 +636,46 @@ export interface AdminGroupItem {
   createdAt: string;
 }
 
+export interface VisitorTimelineEvent {
+  id: string;
+  action: string;
+  section?: string;
+  path: string;
+  timestamp: string;
+}
+
+export interface LiveVisitor {
+  sessionId: string;
+  ip: string;
+  city: string;
+  region: string;
+  country: string;
+  isp: string;
+  currentPath: string;
+  currentAction: string;
+  currentSection?: string;
+  referrer: string;
+  deviceCategory: 'mobile' | 'desktop' | 'tablet' | 'unknown';
+  browserInfo: string;
+  screenResolution: string;
+  language: string;
+  firstSeenAt: string;
+  lastPingAt: string;
+  sessionDurationSeconds: number;
+  totalEvents: number;
+  isReturning: boolean;
+  timeline: VisitorTimelineEvent[];
+}
+
+export interface LiveVisitorResponse {
+  totalActiveVisitors: number;
+  totalVisitorsToday: number;
+  peakVisitorsToday: number;
+  visitors: LiveVisitor[];
+  cityDistribution: Record<string, number>;
+  deviceDistribution: Record<string, number>;
+  referrerDistribution: Record<string, number>;
+  sectionDistribution: Record<string, number>;
+  timestamp: string;
+}
+

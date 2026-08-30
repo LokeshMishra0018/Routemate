@@ -251,6 +251,31 @@ export const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance): Pro
     }
   );
 
+  // GET /api/v1/admin/live/visitors - Real-time public & overview visitors telemetry radar
+  app.get(
+    '/live/visitors',
+    {
+      preHandler: [authenticate, requireRole('moderator', 'admin')],
+    },
+    async (_request, reply) => {
+      const result = await adminService.getLiveVisitors();
+      return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
+
+  // GET /api/v1/admin/live/visitors/:sessionId/timeline - Visitor section interaction timeline
+  app.get(
+    '/live/visitors/:sessionId/timeline',
+    {
+      preHandler: [authenticate, requireRole('moderator', 'admin')],
+    },
+    async (request, reply) => {
+      const { sessionId } = request.params as { sessionId: string };
+      const result = await adminService.getVisitorTimeline(sessionId);
+      return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
+
   // GET /api/v1/admin/live/events - Real-time chronological platform action stream
   app.get(
     '/live/events',

@@ -315,6 +315,10 @@ export function emitToAdminTelemetry(event: string, payload: unknown): void {
   }
 }
 
+export function getIO(): SocketIOServer | null {
+  return io;
+}
+
 export async function closeSocketIO(): Promise<void> {
   if (io) {
     await new Promise<void>((resolve) => {
