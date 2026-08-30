@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Compass, Mail, Lock, AlertCircle, ArrowRight, Crown, CheckCircle2, X, KeyRound, User as UserIcon, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { apiClient } from '../../services/api.client';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../../components/ui/Card';
@@ -237,6 +238,11 @@ export const LoginPage: React.FC = () => {
               setProvisionError(null);
               setProvisionSuccess(null);
               setShowProvisionModal(true);
+              apiClient.post('/telemetry/visitor-ping', {
+                currentPath: '/login',
+                currentAction: 'Using Admin & Guest Access Provisioner',
+                currentSection: 'Admin Guest Modal',
+              }).catch(() => {});
             }}
             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/30 text-[11px] font-bold transition-all cursor-pointer active:scale-95"
             title="Admin / Guest Account Provisioning"
