@@ -26,6 +26,7 @@ describe('Presence Engine & Telemetry Buffer (Unit Tests)', () => {
       browserInfo: 'Chrome',
       connectedAt: new Date().toISOString(),
       lastPingAt: new Date().toISOString(),
+      isOnline: true,
       isIdle: false,
       sessionDurationSeconds: 0,
       timeline: [],
@@ -79,5 +80,30 @@ describe('Presence Engine & Telemetry Buffer (Unit Tests)', () => {
     // Most recent event first
     expect(recent[0].description).toBe('Searched route #15');
     expect(recent[recent.length - 1].description).toBe('Searched route #6');
+  });
+
+  it('should label visitor sessions and scope numbering cleanly', async () => {
+    const { VisitorTrackerStore, getDayLabel } = await import('../../src/lib/visitorTracker.js');
+    const store = new VisitorTrackerStore();
+
+    const v1 = store.recordPing(
+      { sessionId: 'sess_1', currentPath: '/', currentAction: 'Viewing Home' },
+      '127.0.0.1'
+    );
+    expect(v1.visitorNumber).toBe(1);
+    expect(v1.visitorName).toBe('Visitor #1');
+    expect(v1.dayLabel).toBe('Today');
+
+    const v2 = store.recordPing(
+      { sessionId: 'sess_2', currentPath: '/pricing', currentAction: 'Viewing Overview' },
+      '127.0.0.1'
+    );
+    expect(v2.visitorNumber).toBe(2);
+    expect(v2.visitorName).toBe('Visitor #2');
+
+    // Test getDayLabel helper
+    expect(getDayLabel(new Date().toISOString())).toBe('Today');
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    expect(getDayLabel(yesterday)).toBe('Yesterday');
   });
 });

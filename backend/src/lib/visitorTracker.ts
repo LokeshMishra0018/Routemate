@@ -23,9 +23,26 @@ export interface VisitorTimelineEvent {
   timestamp: string;
 }
 
+export function getDayLabel(dateStr: string): string {
+  if (!dateStr) return 'Today';
+  const date = new Date(dateStr);
+  const now = new Date();
+
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const itemDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+  const diffDays = Math.round((today.getTime() - itemDay.getTime()) / (24 * 60 * 60 * 1000));
+
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
 export interface LiveVisitor {
   visitorNumber: number;
   visitorName: string;
+  dayLabel?: string;
+  visitDate?: string;
   sessionId: string;
   ip: string;
   city: string;
@@ -139,6 +156,7 @@ export class VisitorTrackerStore {
     if (this.currentDay !== today) {
       this.currentDay = today;
       this.dailyUniqueCount = 0;
+      this.nextVisitorNumber = 1;
       this.peakToday = 0;
     }
   }
@@ -151,6 +169,9 @@ export class VisitorTrackerStore {
       const db = getDb();
       if (!db) return;
 
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
       const docs = await db
         .collection(COLLECTIONS.VISITOR_SESSIONS)
         .find({})
@@ -158,21 +179,34 @@ export class VisitorTrackerStore {
         .limit(100)
         .toArray();
 
+      let maxTodayVisitorNumber = 0;
+      let todayCount = 0;
+
       for (const doc of docs) {
         const v = doc as unknown as LiveVisitor;
         if (v.sessionId && !this.visitors.has(v.sessionId)) {
+          const pingDate = new Date(v.lastPingAt);
           const isRecentlyActive =
-            Date.now() - new Date(v.lastPingAt).getTime() < this.maxActiveSeconds * 1000;
+            Date.now() - pingDate.getTime() < this.maxActiveSeconds * 1000;
+          const isFromToday = pingDate >= todayStart;
+
           this.visitors.set(v.sessionId, {
             ...v,
             isActive: isRecentlyActive,
+            dayLabel: getDayLabel(v.firstSeenAt || v.lastPingAt),
+            visitDate: v.visitDate || (v.firstSeenAt || v.lastPingAt).split('T')[0],
           });
-          if (v.visitorNumber >= this.nextVisitorNumber) {
-            this.nextVisitorNumber = v.visitorNumber + 1;
+
+          if (isFromToday) {
+            todayCount++;
+            if (typeof v.visitorNumber === 'number' && v.visitorNumber > maxTodayVisitorNumber) {
+              maxTodayVisitorNumber = v.visitorNumber;
+            }
           }
         }
       }
-      this.dailyUniqueCount = Math.max(this.dailyUniqueCount, this.visitors.size);
+      this.dailyUniqueCount = todayCount;
+      this.nextVisitorNumber = Math.max(1, maxTodayVisitorNumber + 1);
     } catch {
       // Ignore DB init errors on cold start
     }
@@ -275,15 +309,20 @@ export class VisitorTrackerStore {
         sessionDurationSeconds: durationSeconds,
         totalEvents: existing.totalEvents + 1,
         isActive: true,
+        dayLabel: getDayLabel(existing.firstSeenAt || nowIso),
+        visitDate: existing.visitDate || nowIso.split('T')[0],
         timeline: updatedTimeline,
       };
     } else {
       const vNum = this.nextVisitorNumber++;
       this.dailyUniqueCount += 1;
+      const visitDate = nowIso.split('T')[0];
 
       visitor = {
         visitorNumber: vNum,
         visitorName: `Visitor #${vNum}`,
+        dayLabel: 'Today',
+        visitDate,
         sessionId: payload.sessionId,
         ip,
         city: geo.city,
@@ -325,6 +364,8 @@ export class VisitorTrackerStore {
           visitor: {
             visitorNumber: visitor.visitorNumber,
             visitorName: visitor.visitorName,
+            dayLabel: visitor.dayLabel || 'Today',
+            visitDate: visitor.visitDate,
             sessionId: visitor.sessionId,
             city: visitor.city,
             region: visitor.region,
@@ -371,6 +412,8 @@ export class VisitorTrackerStore {
       return {
         ...v,
         isActive: isStillActive,
+        dayLabel: getDayLabel(v.firstSeenAt || v.lastPingAt),
+        visitDate: v.visitDate || (v.firstSeenAt || v.lastPingAt).split('T')[0],
         sessionDurationSeconds: Math.max(0, Math.floor((now - firstSeen) / 1000)),
       };
     });
@@ -402,7 +445,7 @@ export class VisitorTrackerStore {
 
     return {
       totalActiveVisitors: activeCount,
-      totalVisitorsToday: Math.max(this.dailyUniqueCount, visitorsList.length),
+      totalVisitorsToday: Math.max(this.dailyUniqueCount, visitorsList.filter((v) => v.dayLabel === 'Today').length),
       peakVisitorsToday: Math.max(this.peakToday, activeCount),
       visitors: visitorsList,
       cityDistribution,
@@ -413,27 +456,47 @@ export class VisitorTrackerStore {
     };
   }
 
-  async getHistoricalVisitors(range: 'live' | '24h' | '7d' = 'live'): Promise<LiveVisitorResponse> {
+  async getHistoricalVisitors(range: 'live' | 'today' | 'yesterday' | '24h' | '7d' = 'live'): Promise<LiveVisitorResponse> {
     if (range === 'live') {
       return this.getLiveVisitors();
     }
 
-    const cutoffMs = range === '24h' ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
-    const cutoffDate = new Date(Date.now() - cutoffMs);
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const startOfYesterday = new Date(startOfToday.getTime() - 24 * 60 * 60 * 1000);
+    const endOfYesterday = new Date(startOfToday.getTime() - 1);
+
+    let cutoffDate: Date;
+    let maxDate: Date | null = null;
+
+    if (range === 'today') {
+      cutoffDate = startOfToday;
+    } else if (range === 'yesterday') {
+      cutoffDate = startOfYesterday;
+      maxDate = endOfYesterday;
+    } else if (range === '24h') {
+      cutoffDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    } else {
+      cutoffDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    }
+
     let visitorsList = Array.from(this.visitors.values());
 
     try {
       const db = getDb();
       if (db) {
+        const timeFilter: any = {
+          $or: [
+            { updatedAt: { $gte: cutoffDate, ...(maxDate ? { $lte: maxDate } : {}) } },
+            { lastPingAt: { $gte: cutoffDate.toISOString(), ...(maxDate ? { $lte: maxDate.toISOString() } : {}) } },
+            { createdAt: { $gte: cutoffDate, ...(maxDate ? { $lte: maxDate } : {}) } },
+          ],
+        };
+
         const docs = await db
           .collection(COLLECTIONS.VISITOR_SESSIONS)
-          .find({
-            $or: [
-              { updatedAt: { $gte: cutoffDate } },
-              { lastPingAt: { $gte: cutoffDate.toISOString() } },
-              { createdAt: { $gte: cutoffDate } },
-            ],
-          })
+          .find(timeFilter)
           .sort({ lastPingAt: -1 })
           .limit(200)
           .toArray();
@@ -445,12 +508,22 @@ export class VisitorTrackerStore {
             map.set(v.sessionId, {
               ...v,
               isActive: this.visitors.get(v.sessionId)?.isActive || false,
+              dayLabel: getDayLabel(v.firstSeenAt || v.lastPingAt),
+              visitDate: v.visitDate || (v.firstSeenAt || v.lastPingAt).split('T')[0],
               timeline: Array.isArray(v.timeline) ? v.timeline : [],
             });
           }
 
           for (const [id, memVisitor] of this.visitors.entries()) {
-            map.set(id, memVisitor);
+            const pingTime = new Date(memVisitor.lastPingAt).getTime();
+            const inRange = pingTime >= cutoffDate.getTime() && (!maxDate || pingTime <= maxDate.getTime());
+            if (inRange) {
+              map.set(id, {
+                ...memVisitor,
+                dayLabel: getDayLabel(memVisitor.firstSeenAt || memVisitor.lastPingAt),
+                visitDate: memVisitor.visitDate || (memVisitor.firstSeenAt || memVisitor.lastPingAt).split('T')[0],
+              });
+            }
           }
 
           visitorsList = Array.from(map.values());
@@ -459,6 +532,17 @@ export class VisitorTrackerStore {
     } catch {
       // fallback
     }
+
+    visitorsList = visitorsList
+      .filter((v) => {
+        const pingTime = new Date(v.lastPingAt).getTime();
+        return pingTime >= cutoffDate.getTime() && (!maxDate || pingTime <= maxDate.getTime());
+      })
+      .map((v) => ({
+        ...v,
+        dayLabel: getDayLabel(v.firstSeenAt || v.lastPingAt),
+        visitDate: v.visitDate || (v.firstSeenAt || v.lastPingAt).split('T')[0],
+      }));
 
     visitorsList.sort((a, b) => {
       if (a.isActive && !b.isActive) return -1;

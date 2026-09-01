@@ -662,6 +662,8 @@ export interface VisitorTimelineEvent {
 export interface LiveVisitor {
   visitorNumber: number;
   visitorName: string;
+  dayLabel?: string;
+  visitDate?: string;
   sessionId: string;
   ip: string;
   city: string;

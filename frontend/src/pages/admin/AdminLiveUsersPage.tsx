@@ -42,12 +42,12 @@ import { useSocket } from '../../context/SocketContext';
 export const AdminLiveUsersPage: React.FC = () => {
   const { socket } = useSocket();
   const [activeTab, setActiveTab] = useState<'students' | 'visitors'>('visitors');
-  const [timeRange, setTimeRange] = useState<'live' | '24h' | '7d'>('live');
+  const [timeRange, setTimeRange] = useState<'live' | 'today' | 'yesterday' | '24h' | '7d'>('live');
   const [selectedUser, setSelectedUser] = useState<LivePresenceUser | null>(null);
   const [selectedVisitor, setSelectedVisitor] = useState<LiveVisitor | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // 1. Fetch authenticated students presence / 7-day session snapshot
+  // 1. Fetch authenticated students presence / session snapshot
   const {
     data: studentsData,
     isLoading: isStudentsLoading,
@@ -62,7 +62,7 @@ export const AdminLiveUsersPage: React.FC = () => {
     refetchInterval: timeRange === 'live' ? 5000 : 15000,
   });
 
-  // 2. Fetch public & overview visitors / 7-day visitor snapshot
+  // 2. Fetch public & overview visitors / visitor snapshot
   const {
     data: visitorsData,
     isLoading: isVisitorsLoading,
@@ -144,7 +144,8 @@ export const AdminLiveUsersPage: React.FC = () => {
       v.referrer.toLowerCase().includes(searchQuery.toLowerCase()) ||
       v.currentAction.toLowerCase().includes(searchQuery.toLowerCase()) ||
       v.browserInfo.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      v.sessionId.toLowerCase().includes(searchQuery.toLowerCase())
+      v.sessionId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (v.dayLabel && v.dayLabel.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   const totalLiveTraffic = (studentsData?.totalOnline || 0) + (visitorsData?.totalActiveVisitors || 0);
@@ -174,7 +175,7 @@ export const AdminLiveUsersPage: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          {/* Time Range Selector */}
+          {/* Day / Time Range Selector */}
           <div className="bg-slate-900 border border-slate-800 p-1 rounded-xl flex items-center gap-1 shadow-inner">
             <button
               onClick={() => setTimeRange('live')}
@@ -188,15 +189,26 @@ export const AdminLiveUsersPage: React.FC = () => {
               Live Now
             </button>
             <button
-              onClick={() => setTimeRange('24h')}
+              onClick={() => setTimeRange('today')}
               className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                timeRange === '24h'
+                timeRange === 'today'
                   ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               <Clock className="w-3.5 h-3.5" />
-              Past 24h
+              Today
+            </button>
+            <button
+              onClick={() => setTimeRange('yesterday')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                timeRange === 'yesterday'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              Yesterday
             </button>
             <button
               onClick={() => setTimeRange('7d')}
@@ -413,8 +425,19 @@ export const AdminLiveUsersPage: React.FC = () => {
                               {v.isConverted ? '🎓' : `#${v.visitorNumber || 1}`}
                             </div>
                             <div>
-                              <div className="font-bold text-white flex items-center gap-2 text-xs">
+                              <div className="font-bold text-white flex items-center gap-1.5 text-xs flex-wrap">
                                 <span>{v.convertedUser?.name || v.visitorName || `Visitor #${v.visitorNumber || 1}`}</span>
+                                {v.dayLabel && (
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full border ${
+                                    v.dayLabel === 'Today'
+                                      ? 'bg-sky-500/10 text-sky-400 border-sky-500/30'
+                                      : v.dayLabel === 'Yesterday'
+                                      ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                                      : 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30'
+                                  }`}>
+                                    {v.dayLabel}
+                                  </span>
+                                )}
                                 {v.isConverted && (
                                   <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/40 px-1.5 py-0.2 rounded-full">
                                     <Sparkles className="w-2.5 h-2.5 text-amber-400" />

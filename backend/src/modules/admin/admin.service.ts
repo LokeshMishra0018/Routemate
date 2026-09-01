@@ -530,9 +530,9 @@ export class AdminService {
   }
 
   /**
-   * Real-time Live Users & Active Screen Telemetry (Supports Live, 24h, 7d ranges)
+   * Real-time Live Users & Active Screen Telemetry (Supports Live, Today, Yesterday, 24h, 7d ranges)
    */
-  async getLivePresence(range: 'live' | '24h' | '7d' = 'live') {
+  async getLivePresence(range: 'live' | 'today' | 'yesterday' | '24h' | '7d' = 'live') {
     const { presenceStore } = await import('../../lib/presence.js');
     const allUsers = await presenceStore.getHistoricalPresence(range);
     const activeOnlineUsers = allUsers.filter((u) => u.isOnline);
@@ -563,9 +563,9 @@ export class AdminService {
   }
 
   /**
-   * Live Public & Overview Visitors Telemetry Radar (Supports Live, 24h, 7d ranges)
+   * Live Public & Overview Visitors Telemetry Radar (Supports Live, Today, Yesterday, 24h, 7d ranges)
    */
-  async getLiveVisitors(range: 'live' | '24h' | '7d' = 'live') {
+  async getLiveVisitors(range: 'live' | 'today' | 'yesterday' | '24h' | '7d' = 'live') {
     const { visitorTrackerStore } = await import('../../lib/visitorTracker.js');
     return visitorTrackerStore.getHistoricalVisitors(range);
   }

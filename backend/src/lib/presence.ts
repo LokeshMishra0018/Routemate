@@ -43,7 +43,7 @@ export interface PresenceStore {
   getPresence(socketId: string): Promise<LivePresence | null> | (LivePresence | null);
   getAllPresence(): Promise<LivePresence[]> | LivePresence[];
   getUserPresence(userId: string): Promise<LivePresence[]> | LivePresence[];
-  getHistoricalPresence(range?: 'live' | '24h' | '7d'): Promise<LivePresence[]>;
+  getHistoricalPresence(range?: 'live' | 'today' | 'yesterday' | '24h' | '7d'): Promise<LivePresence[]>;
   clear(): Promise<void> | void;
 }
 
@@ -390,29 +390,48 @@ export class MemoryPresenceStore implements PresenceStore {
   }
 
   /**
-   * Query historical presence records for past 24h or 7d
+   * Query historical presence records for live, today, yesterday, past 24h or 7d
    */
-  async getHistoricalPresence(range: 'live' | '24h' | '7d' = 'live'): Promise<LivePresence[]> {
+  async getHistoricalPresence(range: 'live' | 'today' | 'yesterday' | '24h' | '7d' = 'live'): Promise<LivePresence[]> {
     if (range === 'live') {
-      return this.getAllPresence().filter((p) => p.isOnline);
+      return this.getAllPresence();
     }
 
-    const cutoffMs = range === '24h' ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
-    const cutoffDate = new Date(Date.now() - cutoffMs);
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const startOfYesterday = new Date(startOfToday.getTime() - 24 * 60 * 60 * 1000);
+    const endOfYesterday = new Date(startOfToday.getTime() - 1);
+
+    let cutoffDate: Date;
+    let maxDate: Date | null = null;
+
+    if (range === 'today') {
+      cutoffDate = startOfToday;
+    } else if (range === 'yesterday') {
+      cutoffDate = startOfYesterday;
+      maxDate = endOfYesterday;
+    } else if (range === '24h') {
+      cutoffDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    } else {
+      cutoffDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    }
 
     // Fetch from MongoDB
     try {
       const db = getDb();
       if (db) {
+        const timeFilter: any = {
+          $or: [
+            { updatedAt: { $gte: cutoffDate, ...(maxDate ? { $lte: maxDate } : {}) } },
+            { lastPingAt: { $gte: cutoffDate.toISOString(), ...(maxDate ? { $lte: maxDate.toISOString() } : {}) } },
+            { createdAt: { $gte: cutoffDate, ...(maxDate ? { $lte: maxDate } : {}) } },
+          ],
+        };
+
         const docs = await db
           .collection(COLLECTIONS.STUDENT_SESSIONS)
-          .find({
-            $or: [
-              { updatedAt: { $gte: cutoffDate } },
-              { lastPingAt: { $gte: cutoffDate.toISOString() } },
-              { createdAt: { $gte: cutoffDate } },
-            ],
-          })
+          .find(timeFilter)
           .sort({ lastPingAt: -1 })
           .limit(200)
           .toArray();
@@ -433,7 +452,11 @@ export class MemoryPresenceStore implements PresenceStore {
 
           for (const [userId, memPresence] of this.sessionHistory.entries()) {
             if (!map.has(userId)) {
-              map.set(userId, memPresence);
+              const pingTime = new Date(memPresence.lastPingAt).getTime();
+              const inRange = pingTime >= cutoffDate.getTime() && (!maxDate || pingTime <= maxDate.getTime());
+              if (inRange) {
+                map.set(userId, memPresence);
+              }
             }
           }
 
@@ -455,7 +478,7 @@ export class MemoryPresenceStore implements PresenceStore {
 
     return this.getAllPresence().filter((p) => {
       const pingTime = new Date(p.lastPingAt).getTime();
-      return pingTime >= Date.now() - cutoffMs;
+      return pingTime >= cutoffDate.getTime() && (!maxDate || pingTime <= maxDate.getTime());
     });
   }
 

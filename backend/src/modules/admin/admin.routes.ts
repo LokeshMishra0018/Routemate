@@ -239,15 +239,16 @@ export const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance): Pro
   // COMMAND CENTER: REALTIME & ANALYTICS APIs
   // ==========================================
 
-  // GET /api/v1/admin/live/users - Real-time active users & current action telemetry (Supports range=live|24h|7d)
+  // GET /api/v1/admin/live/users - Real-time active users & current action telemetry (Supports range=live|today|yesterday|24h|7d)
   app.get(
     '/live/users',
     {
       preHandler: [authenticate, requireRole('moderator', 'admin')],
     },
     async (request, reply) => {
-      const query = request.query as { range?: 'live' | '24h' | '7d' };
-      const range = query.range === '24h' || query.range === '7d' ? query.range : 'live';
+      const query = request.query as { range?: 'live' | 'today' | 'yesterday' | '24h' | '7d' };
+      const validRanges = ['live', 'today', 'yesterday', '24h', '7d'];
+      const range = query.range && validRanges.includes(query.range) ? query.range : 'live';
       const result = await adminService.getLivePresence(range);
       return reply.status(200).send(createSuccessResponse(result));
     }
@@ -266,15 +267,16 @@ export const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance): Pro
     }
   );
 
-  // GET /api/v1/admin/live/visitors - Real-time public & overview visitors telemetry radar (Supports range=live|24h|7d)
+  // GET /api/v1/admin/live/visitors - Real-time public & overview visitors telemetry radar (Supports range=live|today|yesterday|24h|7d)
   app.get(
     '/live/visitors',
     {
       preHandler: [authenticate, requireRole('moderator', 'admin')],
     },
     async (request, reply) => {
-      const query = request.query as { range?: 'live' | '24h' | '7d' };
-      const range = query.range === '24h' || query.range === '7d' ? query.range : 'live';
+      const query = request.query as { range?: 'live' | 'today' | 'yesterday' | '24h' | '7d' };
+      const validRanges = ['live', 'today', 'yesterday', '24h', '7d'];
+      const range = query.range && validRanges.includes(query.range) ? query.range : 'live';
       const result = await adminService.getLiveVisitors(range);
       return reply.status(200).send(createSuccessResponse(result));
     }
