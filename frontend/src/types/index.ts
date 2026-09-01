@@ -395,7 +395,7 @@ export interface LivePresenceUser {
   isOnline: boolean;
   isIdle: boolean;
   sessionDurationSeconds: number;
-  timeline: StudentTimelineEvent[];
+  timeline?: StudentTimelineEvent[];
 }
 
 export interface LivePresenceResponse {

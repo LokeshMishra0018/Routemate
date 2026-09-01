@@ -28,6 +28,7 @@ describe('Presence Engine & Telemetry Buffer (Unit Tests)', () => {
       lastPingAt: new Date().toISOString(),
       isIdle: false,
       sessionDurationSeconds: 0,
+      timeline: [],
     };
 
     presenceStore.setPresence('sock_123', mockPresence);
@@ -58,7 +59,7 @@ describe('Presence Engine & Telemetry Buffer (Unit Tests)', () => {
     expect(allAfterDisconnect.length).toBe(1);
     expect(allAfterDisconnect[0].isOnline).toBe(false);
     expect(allAfterDisconnect[0].currentAction).toContain('Disconnected');
-    expect(allAfterDisconnect[0].timeline.length).toBeGreaterThan(0);
+    expect((allAfterDisconnect[0].timeline || []).length).toBeGreaterThan(0);
   });
 
   it('should record events and enforce maximum ring buffer capacity', async () => {

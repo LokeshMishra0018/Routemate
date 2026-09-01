@@ -31,7 +31,7 @@ export interface LivePresence {
   isOnline: boolean;
   isIdle: boolean;
   sessionDurationSeconds: number;
-  timeline: StudentTimelineEvent[];
+  timeline?: StudentTimelineEvent[];
   updatedAt?: string | Date;
 }
 
