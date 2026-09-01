@@ -149,6 +149,7 @@ export function initSocketIO(httpServer: HttpServer): SocketIOServer {
       isOnline: true,
       isIdle: false,
       sessionDurationSeconds: 0,
+      timeline: [],
     };
 
     presenceStore.setPresence(socket.id, initialPresence);
@@ -216,6 +217,15 @@ export function initSocketIO(httpServer: HttpServer): SocketIOServer {
           data.description,
           data.metadata
         );
+
+        // Also record to presenceStore student session timeline
+        const currentPres = presenceStore.getPresence(socket.id);
+        presenceStore.addTimelineEvent(userId, {
+          action: data.description,
+          path: currentPres?.currentPath || '/dashboard',
+          category: 'action',
+          metadata: data.metadata,
+        });
 
         // Stream event in real-time to admin listeners
         io?.to('room:admin:telemetry').emit('admin:telemetry_event', event);

@@ -8,7 +8,6 @@ import {
   Monitor,
   Tablet,
   Clock,
-  Activity,
   Search,
   Eye,
   X,
@@ -16,10 +15,13 @@ import {
   Sparkles,
   MapPin,
   Compass,
-  ExternalLink,
   Layers,
-  Flame,
   ShieldCheck,
+  Calendar,
+  Navigation,
+  CheckCircle2,
+  LogOut,
+  LogIn,
 } from 'lucide-react';
 import { apiClient } from '../../services/api.client';
 import {
@@ -29,6 +31,7 @@ import {
   LiveVisitorResponse,
   LiveVisitor,
   VisitorTimelineEvent,
+  StudentTimelineEvent,
 } from '../../types';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
@@ -39,57 +42,63 @@ import { useSocket } from '../../context/SocketContext';
 export const AdminLiveUsersPage: React.FC = () => {
   const { socket } = useSocket();
   const [activeTab, setActiveTab] = useState<'students' | 'visitors'>('visitors');
+  const [timeRange, setTimeRange] = useState<'live' | '24h' | '7d'>('live');
   const [selectedUser, setSelectedUser] = useState<LivePresenceUser | null>(null);
   const [selectedVisitor, setSelectedVisitor] = useState<LiveVisitor | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // 1. Fetch live authenticated users presence snapshot
+  // 1. Fetch authenticated students presence / 7-day session snapshot
   const {
     data: studentsData,
     isLoading: isStudentsLoading,
     refetch: refetchStudents,
     isRefetching: isStudentsRefetching,
   } = useQuery<LivePresenceResponse>({
-    queryKey: ['admin-live-presence'],
+    queryKey: ['admin-live-presence', timeRange],
     queryFn: async () => {
-      const res = await apiClient.get('/admin/live/users');
+      const res = await apiClient.get(`/admin/live/users?range=${timeRange}`);
       return res.data.data;
     },
-    refetchInterval: 5000,
+    refetchInterval: timeRange === 'live' ? 5000 : 15000,
   });
 
-  // 2. Fetch live public & overview page visitors snapshot
+  // 2. Fetch public & overview visitors / 7-day visitor snapshot
   const {
     data: visitorsData,
     isLoading: isVisitorsLoading,
     refetch: refetchVisitors,
     isRefetching: isVisitorsRefetching,
   } = useQuery<LiveVisitorResponse>({
-    queryKey: ['admin-live-visitors'],
+    queryKey: ['admin-live-visitors', timeRange],
     queryFn: async () => {
-      const res = await apiClient.get('/admin/live/visitors');
+      const res = await apiClient.get(`/admin/live/visitors?range=${timeRange}`);
       return res.data.data;
     },
-    refetchInterval: 5000,
+    refetchInterval: timeRange === 'live' ? 5000 : 15000,
   });
 
-  // Query user specific events when inspecting student
-  const { data: userEvents, isLoading: isEventsLoading } = useQuery<LiveTelemetryEvent[]>({
-    queryKey: ['admin-user-events', selectedUser?.userId],
+  // 3. Query student specific timeline when inspecting student
+  const { data: studentTimelineData, isLoading: isStudentTimelineLoading } = useQuery<StudentTimelineEvent[]>({
+    queryKey: ['admin-student-timeline', selectedUser?.userId],
     queryFn: async () => {
       if (!selectedUser) return [];
-      const res = await apiClient.get(`/admin/live/events?limit=50`);
-      const allEvents: LiveTelemetryEvent[] = res.data.data || [];
-      return allEvents.filter((e) => e.userId === selectedUser.userId);
+      if (selectedUser.timeline && selectedUser.timeline.length > 0) {
+        return selectedUser.timeline;
+      }
+      const res = await apiClient.get(`/admin/live/users/${selectedUser.userId}/timeline`);
+      return res.data.data || [];
     },
     enabled: !!selectedUser,
   });
 
-  // Query visitor specific timeline when inspecting visitor
-  const { data: visitorTimeline, isLoading: isVisitorTimelineLoading } = useQuery<VisitorTimelineEvent[]>({
+  // 4. Query visitor specific timeline when inspecting visitor
+  const { data: visitorTimelineData, isLoading: isVisitorTimelineLoading } = useQuery<VisitorTimelineEvent[]>({
     queryKey: ['admin-visitor-timeline', selectedVisitor?.sessionId],
     queryFn: async () => {
       if (!selectedVisitor) return [];
+      if (selectedVisitor.timeline && selectedVisitor.timeline.length > 0) {
+        return selectedVisitor.timeline;
+      }
       const res = await apiClient.get(`/admin/live/visitors/${selectedVisitor.sessionId}/timeline`);
       return res.data.data || [];
     },
@@ -101,11 +110,11 @@ export const AdminLiveUsersPage: React.FC = () => {
     if (!socket) return;
 
     const handlePresenceUpdate = () => {
-      refetchStudents();
+      if (timeRange === 'live') refetchStudents();
     };
 
     const handleVisitorUpdate = () => {
-      refetchVisitors();
+      if (timeRange === 'live') refetchVisitors();
     };
 
     socket.on('admin:presence_updated', handlePresenceUpdate);
@@ -115,7 +124,7 @@ export const AdminLiveUsersPage: React.FC = () => {
       socket.off('admin:presence_updated', handlePresenceUpdate);
       socket.off('admin:visitor_activity', handleVisitorUpdate);
     };
-  }, [socket, refetchStudents, refetchVisitors]);
+  }, [socket, refetchStudents, refetchVisitors, timeRange]);
 
   const liveUsers = studentsData?.users || [];
   const liveVisitors = visitorsData?.visitors || [];
@@ -140,6 +149,18 @@ export const AdminLiveUsersPage: React.FC = () => {
 
   const totalLiveTraffic = (studentsData?.totalOnline || 0) + (visitorsData?.totalActiveVisitors || 0);
 
+  // Student timeline events combined
+  const activeStudentTimeline: StudentTimelineEvent[] =
+    (studentTimelineData && studentTimelineData.length > 0
+      ? studentTimelineData
+      : selectedUser?.timeline) || [];
+
+  // Visitor timeline events combined
+  const activeVisitorTimeline: VisitorTimelineEvent[] =
+    (visitorTimelineData && visitorTimelineData.length > 0
+      ? visitorTimelineData
+      : selectedVisitor?.timeline) || [];
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -149,10 +170,47 @@ export const AdminLiveUsersPage: React.FC = () => {
             <Radio className="w-6 h-6 text-emerald-400 animate-pulse" /> Live Telemetry & Traffic Radar
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Real-time public landing page visitors, geolocation detection, acquisition channels, and active student sessions.
+            Real-time public landing page visitors, geolocation detection, acquisition channels, and 7-day student session journeys.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Time Range Selector */}
+          <div className="bg-slate-900 border border-slate-800 p-1 rounded-xl flex items-center gap-1 shadow-inner">
+            <button
+              onClick={() => setTimeRange('live')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                timeRange === 'live'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              Live Now
+            </button>
+            <button
+              onClick={() => setTimeRange('24h')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                timeRange === '24h'
+                  ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              Past 24h
+            </button>
+            <button
+              onClick={() => setTimeRange('7d')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                timeRange === '7d'
+                  ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              Past 7 Days
+            </button>
+          </div>
+
           <Button
             size="sm"
             variant="outline"
@@ -170,10 +228,11 @@ export const AdminLiveUsersPage: React.FC = () => {
           >
             Refresh Radar
           </Button>
+
           <div className="flex items-center gap-2 bg-emerald-950/80 border border-emerald-500/40 px-3 py-1.5 rounded-xl shadow-lg shadow-emerald-950/40">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
             <span className="text-xs font-bold text-emerald-300">
-              {totalLiveTraffic} Total Live Traffic ({visitorsData?.totalActiveVisitors || 0} Visitors •{' '}
+              {totalLiveTraffic} Total Live ({visitorsData?.totalActiveVisitors || 0} Visitors •{' '}
               {studentsData?.totalOnline || 0} Students)
             </span>
           </div>
@@ -193,7 +252,7 @@ export const AdminLiveUsersPage: React.FC = () => {
             </span>
           </div>
           <span className="text-[11px] text-slate-400">
-            {visitorsData?.totalVisitorsToday || 0} total visits today (Peak: {visitorsData?.peakVisitorsToday || 0})
+            {visitorsData?.totalVisitorsToday || liveVisitors.length} total sessions ({timeRange === 'live' ? 'Today' : timeRange === '24h' ? '24h' : '7 Days'})
           </span>
         </Card>
 
@@ -208,7 +267,7 @@ export const AdminLiveUsersPage: React.FC = () => {
             </span>
           </div>
           <span className="text-[11px] text-slate-400">
-            {liveUsers.length} total session{liveUsers.length !== 1 ? 's' : ''} logged today
+            {liveUsers.length} total session{liveUsers.length !== 1 ? 's' : ''} stored ({timeRange === 'live' ? 'Today' : timeRange === '24h' ? '24h' : '7 Days'})
           </span>
         </Card>
 
@@ -219,7 +278,7 @@ export const AdminLiveUsersPage: React.FC = () => {
           <div className="text-2xl font-black text-purple-300">
             {visitorsData?.deviceDistribution?.mobile || 0}M / {visitorsData?.deviceDistribution?.desktop || 0}D
           </div>
-          <span className="text-[11px] text-slate-400">Visitor device categories</span>
+          <span className="text-[11px] text-slate-400">Visitor client devices</span>
         </Card>
 
         <Card className="glass-card p-4 space-y-1 bg-gradient-to-br from-amber-950/30 to-slate-900/60 border-amber-500/20">
@@ -248,7 +307,7 @@ export const AdminLiveUsersPage: React.FC = () => {
           <Globe className="w-4 h-4" />
           <span>Public & Overview Page Visitors</span>
           <span className="px-1.5 py-0.2 rounded-full bg-sky-500/20 text-sky-300 text-[10px] font-black">
-            {visitorsData?.totalActiveVisitors || 0}
+            {liveVisitors.length}
           </span>
         </button>
 
@@ -263,7 +322,7 @@ export const AdminLiveUsersPage: React.FC = () => {
           <ShieldCheck className="w-4 h-4" />
           <span>Authenticated College Students</span>
           <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-black">
-            {studentsData?.totalOnline || 0}
+            {liveUsers.length}
           </span>
         </button>
       </div>
@@ -323,13 +382,19 @@ export const AdminLiveUsersPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
-                  {filteredVisitors.length === 0 ? (
+                  {isVisitorsLoading ? (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center text-slate-500">
+                        <LoadingSpinner size="sm" text="Loading visitors..." />
+                      </td>
+                    </tr>
+                  ) : filteredVisitors.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="py-12 text-center text-slate-500">
                         <Globe className="w-8 h-8 mx-auto text-slate-600 mb-2 opacity-50" />
-                        No active website visitors in the last 15 minutes.
+                        No website visitors found for {timeRange === 'live' ? 'the active session' : timeRange === '24h' ? 'the past 24 hours' : 'the past 7 days'}.
                         <p className="text-[11px] text-slate-600 mt-1">
-                          Open the homepage in a separate tab or on your phone to see yourself appear here live!
+                          Open the homepage in a separate tab or mobile phone to see yourself appear live!
                         </p>
                       </td>
                     </tr>
@@ -472,7 +537,7 @@ export const AdminLiveUsersPage: React.FC = () => {
                 <thead className="bg-slate-900/90 text-slate-400 font-bold border-b border-slate-800 uppercase text-[10px] tracking-wider">
                   <tr>
                     <th className="py-3 px-4">Student</th>
-                    <th className="py-3 px-4">Current Screen</th>
+                    <th className="py-3 px-4">Current / Last Screen</th>
                     <th className="py-3 px-4">Current Action</th>
                     <th className="py-3 px-4">Device</th>
                     <th className="py-3 px-4">Session Duration</th>
@@ -481,11 +546,17 @@ export const AdminLiveUsersPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
-                  {filteredUsers.length === 0 ? (
+                  {isStudentsLoading ? (
+                    <tr>
+                      <td colSpan={7} className="py-10 text-center text-slate-500">
+                        <LoadingSpinner size="sm" text="Loading student sessions..." />
+                      </td>
+                    </tr>
+                  ) : filteredUsers.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="py-10 text-center text-slate-500">
                         <Users className="w-8 h-8 mx-auto text-slate-600 mb-2 opacity-50" />
-                        No authenticated student sessions logged yet.
+                        No authenticated student sessions found for {timeRange === 'live' ? 'the active session' : timeRange === '24h' ? 'the past 24 hours' : 'the past 7 days'}.
                       </td>
                     </tr>
                   ) : (
@@ -640,7 +711,7 @@ export const AdminLiveUsersPage: React.FC = () => {
             {/* Current Session Summary Grid */}
             <div className="grid grid-cols-2 gap-2 bg-slate-950/60 p-3 rounded-xl border border-slate-800/80 text-xs">
               <div>
-                <span className="text-slate-500 block text-[11px]">Location & ISP</span>
+                <span className="text-slate-500 block text-[11px]">Location & Network</span>
                 <span className="font-semibold text-sky-300">
                   {selectedVisitor.city}, {selectedVisitor.region}
                 </span>
@@ -667,19 +738,19 @@ export const AdminLiveUsersPage: React.FC = () => {
             {/* Event Timeline */}
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                <Layers className="w-3.5 h-3.5 text-sky-400" /> Landing Page Reading Journey
+                <Layers className="w-3.5 h-3.5 text-sky-400" /> Landing Page Reading Journey (7-Day Log)
               </h4>
               {isVisitorTimelineLoading ? (
                 <div className="py-8 flex justify-center">
                   <LoadingSpinner size="sm" text="Loading visitor timeline..." />
                 </div>
-              ) : selectedVisitor.timeline.length === 0 ? (
+              ) : activeVisitorTimeline.length === 0 ? (
                 <p className="text-xs text-slate-500 py-4 text-center">
                   No section changes logged yet in this session.
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {selectedVisitor.timeline.map((evt) => (
+                  {activeVisitorTimeline.map((evt) => (
                     <div
                       key={evt.id}
                       className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs flex items-start justify-between gap-3"
@@ -710,20 +781,28 @@ export const AdminLiveUsersPage: React.FC = () => {
         </div>
       )}
 
-      {/* Student Clickstream Inspection Modal */}
+      {/* Student Clickstream Inspection Modal (With Full 7-Day Timeline) */}
       {selectedUser && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150 max-h-[85vh] flex flex-col">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-full bg-indigo-950 border border-indigo-500/40 flex items-center justify-center text-indigo-300 font-bold text-sm">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-900 to-indigo-700 border border-indigo-500/40 flex items-center justify-center text-indigo-200 font-bold text-sm shadow-md">
                   {selectedUser.name.charAt(0)}
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    {selectedUser.name} <Badge variant="brand">Live Session</Badge>
+                    {selectedUser.name}
+                    {selectedUser.isOnline ? (
+                      <Badge variant="brand">🟢 Active Live</Badge>
+                    ) : (
+                      <Badge variant="neutral">⚪ Went Offline</Badge>
+                    )}
                   </h3>
-                  <p className="text-xs text-slate-400">{selectedUser.email}</p>
+                  <p className="text-xs text-slate-400 flex items-center gap-1.5">
+                    <span>{selectedUser.email}</span>
+                    {selectedUser.branch && <span className="text-slate-500">• {selectedUser.branch}</span>}
+                  </p>
                 </div>
               </div>
               <button
@@ -737,7 +816,7 @@ export const AdminLiveUsersPage: React.FC = () => {
             {/* Current Session Summary */}
             <div className="grid grid-cols-2 gap-2 bg-slate-950/60 p-3 rounded-xl border border-slate-800/80 text-xs">
               <div>
-                <span className="text-slate-500 block text-[11px]">Current Screen</span>
+                <span className="text-slate-500 block text-[11px]">Current / Last Screen</span>
                 <span className="font-mono text-indigo-300 font-bold">{selectedUser.currentPath}</span>
               </div>
               <div>
@@ -751,9 +830,9 @@ export const AdminLiveUsersPage: React.FC = () => {
                 </span>
               </div>
               <div>
-                <span className="text-slate-500 block text-[11px]">Session Time</span>
+                <span className="text-slate-500 block text-[11px]">Session Duration</span>
                 <span className="text-slate-300">
-                  {Math.floor(selectedUser.sessionDurationSeconds / 60)} minutes
+                  {Math.floor(selectedUser.sessionDurationSeconds / 60)}m {selectedUser.sessionDurationSeconds % 60}s
                 </span>
               </div>
             </div>
@@ -761,31 +840,52 @@ export const AdminLiveUsersPage: React.FC = () => {
             {/* Event Timeline */}
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Recent Action Timeline
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Student Session & Action Timeline (7-Day Log)
               </h4>
-              {isEventsLoading ? (
+              {isStudentTimelineLoading ? (
                 <div className="py-8 flex justify-center">
                   <LoadingSpinner size="sm" text="Loading action history..." />
                 </div>
-              ) : !userEvents || userEvents.length === 0 ? (
+              ) : activeStudentTimeline.length === 0 ? (
                 <p className="text-xs text-slate-500 py-4 text-center">
-                  No explicit action events recorded in this session yet.
+                  No action events recorded in this session yet.
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {userEvents.map((evt) => (
+                  {activeStudentTimeline.map((evt) => (
                     <div
                       key={evt.id}
-                      className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs flex items-start justify-between gap-3"
+                      className={`p-2.5 rounded-xl border text-xs flex items-start justify-between gap-3 ${
+                        evt.category === 'auth'
+                          ? 'bg-emerald-950/30 border-emerald-500/30'
+                          : evt.category === 'lifecycle'
+                          ? 'bg-slate-950/90 border-slate-800/80 opacity-80'
+                          : evt.category === 'action'
+                          ? 'bg-purple-950/30 border-purple-500/30'
+                          : 'bg-slate-950/80 border-slate-800'
+                      }`}
                     >
-                      <div className="space-y-0.5">
-                        <span className="font-bold text-white block">{evt.description}</span>
-                        <Badge variant="neutral" className="text-[10px] py-0 px-1 font-mono">
-                          {evt.eventType}
-                        </Badge>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5">
+                          {evt.category === 'auth' && <LogIn className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
+                          {evt.category === 'navigation' && <Navigation className="w-3.5 h-3.5 text-sky-400 shrink-0" />}
+                          {evt.category === 'action' && <CheckCircle2 className="w-3.5 h-3.5 text-purple-400 shrink-0" />}
+                          {evt.category === 'lifecycle' && <LogOut className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
+                          <span className="font-bold text-white">{evt.action}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[10px]">
+                          <code className="bg-slate-900 px-1.5 py-0.5 rounded text-indigo-300 font-mono border border-slate-800">
+                            {evt.path}
+                          </code>
+                          {evt.category && (
+                            <Badge variant="neutral" className="text-[9px] py-0 px-1 uppercase tracking-wider">
+                              {evt.category}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
-                      <span className="text-[10px] text-slate-500 shrink-0">
-                        {new Date(evt.timestamp).toLocaleTimeString()}
+                      <span className="text-[10px] text-slate-400 shrink-0">
+                        {new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                       </span>
                     </div>
                   ))}

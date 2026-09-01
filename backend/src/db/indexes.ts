@@ -161,7 +161,7 @@ export const REQUIRED_INDEXES: IndexDefinition[] = [
     options: { name: 'idx_sos_events_status_triggeredAt' },
   },
 
-  // Activity Logs Collection (Telemetry)
+  // Activity Logs Collection (Telemetry & 7-Day Retention TTL)
   {
     collection: COLLECTIONS.ACTIVITY_LOGS,
     indexSpec: { createdAt: -1 },
@@ -169,8 +169,47 @@ export const REQUIRED_INDEXES: IndexDefinition[] = [
   },
   {
     collection: COLLECTIONS.ACTIVITY_LOGS,
+    indexSpec: { createdAt: 1 },
+    options: { expireAfterSeconds: 7 * 24 * 60 * 60, name: 'idx_activity_logs_createdAt_ttl' },
+  },
+  {
+    collection: COLLECTIONS.ACTIVITY_LOGS,
     indexSpec: { userId: 1, eventType: 1 },
     options: { name: 'idx_activity_logs_userId_eventType' },
+  },
+
+  // Student Sessions Collection (Presence & 7-Day Retention TTL)
+  {
+    collection: COLLECTIONS.STUDENT_SESSIONS,
+    indexSpec: { userId: 1 },
+    options: { name: 'idx_student_sessions_userId' },
+  },
+  {
+    collection: COLLECTIONS.STUDENT_SESSIONS,
+    indexSpec: { updatedAt: 1 },
+    options: { expireAfterSeconds: 7 * 24 * 60 * 60, name: 'idx_student_sessions_updatedAt_ttl' },
+  },
+  {
+    collection: COLLECTIONS.STUDENT_SESSIONS,
+    indexSpec: { lastPingAt: -1 },
+    options: { name: 'idx_student_sessions_lastPingAt' },
+  },
+
+  // Visitor Sessions Collection (Visitor Radar & 7-Day Retention TTL)
+  {
+    collection: COLLECTIONS.VISITOR_SESSIONS,
+    indexSpec: { sessionId: 1 },
+    options: { name: 'idx_visitor_sessions_sessionId' },
+  },
+  {
+    collection: COLLECTIONS.VISITOR_SESSIONS,
+    indexSpec: { updatedAt: 1 },
+    options: { expireAfterSeconds: 7 * 24 * 60 * 60, name: 'idx_visitor_sessions_updatedAt_ttl' },
+  },
+  {
+    collection: COLLECTIONS.VISITOR_SESSIONS,
+    indexSpec: { lastPingAt: -1 },
+    options: { name: 'idx_visitor_sessions_lastPingAt' },
   },
 
   // Search Logs Collection (Demand Analytics)

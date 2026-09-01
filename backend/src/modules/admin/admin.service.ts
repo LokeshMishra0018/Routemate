@@ -530,21 +530,25 @@ export class AdminService {
   }
 
   /**
-   * Real-time Live Users & Active Screen Telemetry
+   * Real-time Live Users & Active Screen Telemetry (Supports Live, 24h, 7d ranges)
    */
-  async getLivePresence() {
+  async getLivePresence(range: 'live' | '24h' | '7d' = 'live') {
     const { presenceStore } = await import('../../lib/presence.js');
-    const allUsers = presenceStore.getAllPresence();
+    const allUsers = await presenceStore.getHistoricalPresence(range);
     const activeOnlineUsers = allUsers.filter((u) => u.isOnline);
 
     const pageDistribution: Record<string, number> = {};
     const deviceDistribution: Record<string, number> = { mobile: 0, desktop: 0, tablet: 0, unknown: 0 };
     let idleCount = 0;
 
-    for (const u of activeOnlineUsers) {
-      pageDistribution[u.currentPath] = (pageDistribution[u.currentPath] || 0) + 1;
-      deviceDistribution[u.deviceCategory] = (deviceDistribution[u.deviceCategory] || 0) + 1;
-      if (u.isIdle) idleCount += 1;
+    for (const u of allUsers) {
+      if (u.currentPath) {
+        pageDistribution[u.currentPath] = (pageDistribution[u.currentPath] || 0) + 1;
+      }
+      if (u.deviceCategory) {
+        deviceDistribution[u.deviceCategory] = (deviceDistribution[u.deviceCategory] || 0) + 1;
+      }
+      if (u.isOnline && u.isIdle) idleCount += 1;
     }
 
     return {
@@ -559,11 +563,11 @@ export class AdminService {
   }
 
   /**
-   * Live Public & Overview Visitors Telemetry Radar
+   * Live Public & Overview Visitors Telemetry Radar (Supports Live, 24h, 7d ranges)
    */
-  async getLiveVisitors() {
+  async getLiveVisitors(range: 'live' | '24h' | '7d' = 'live') {
     const { visitorTrackerStore } = await import('../../lib/visitorTracker.js');
-    return visitorTrackerStore.getLiveVisitors();
+    return visitorTrackerStore.getHistoricalVisitors(range);
   }
 
   /**
@@ -572,6 +576,27 @@ export class AdminService {
   async getVisitorTimeline(sessionId: string) {
     const { visitorTrackerStore } = await import('../../lib/visitorTracker.js');
     return visitorTrackerStore.getVisitorTimeline(sessionId);
+  }
+
+  /**
+   * Get specific student action timeline
+   */
+  async getStudentTimeline(userId: string) {
+    const { presenceStore } = await import('../../lib/presence.js');
+    const userPresences = presenceStore.getUserPresence(userId);
+    if (userPresences.length > 0 && userPresences[0].timeline) {
+      return userPresences[0].timeline;
+    }
+
+    const db = getDb();
+    if (db) {
+      const doc = (await db.collection(COLLECTIONS.STUDENT_SESSIONS).findOne({ userId })) as any;
+      if (doc && Array.isArray(doc.timeline)) {
+        return doc.timeline;
+      }
+    }
+
+    return [];
   }
 
   /**

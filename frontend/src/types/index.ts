@@ -365,6 +365,15 @@ export interface ApiError {
 // ADMIN COMMAND CENTER & TELEMETRY TYPES
 // ==========================================
 
+export interface StudentTimelineEvent {
+  id: string;
+  action: string;
+  path: string;
+  category?: 'auth' | 'navigation' | 'action' | 'lifecycle';
+  timestamp: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface LivePresenceUser {
   socketId: string;
   userId: string;
@@ -386,6 +395,7 @@ export interface LivePresenceUser {
   isOnline: boolean;
   isIdle: boolean;
   sessionDurationSeconds: number;
+  timeline: StudentTimelineEvent[];
 }
 
 export interface LivePresenceResponse {

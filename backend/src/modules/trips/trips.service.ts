@@ -123,7 +123,7 @@ export class TripsService {
    */
   async getTripById(id: string): Promise<TripResponseDto> {
     const trip = await tripsRepository.findTripById(id);
-    if (!trip) {
+    if (!trip || trip.isDeleted) {
       throw new NotFoundError('Trip not found');
     }
 

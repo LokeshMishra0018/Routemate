@@ -239,26 +239,43 @@ export const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance): Pro
   // COMMAND CENTER: REALTIME & ANALYTICS APIs
   // ==========================================
 
-  // GET /api/v1/admin/live/users - Real-time active users & current action telemetry
+  // GET /api/v1/admin/live/users - Real-time active users & current action telemetry (Supports range=live|24h|7d)
   app.get(
     '/live/users',
     {
       preHandler: [authenticate, requireRole('moderator', 'admin')],
     },
-    async (_request, reply) => {
-      const result = await adminService.getLivePresence();
+    async (request, reply) => {
+      const query = request.query as { range?: 'live' | '24h' | '7d' };
+      const range = query.range === '24h' || query.range === '7d' ? query.range : 'live';
+      const result = await adminService.getLivePresence(range);
       return reply.status(200).send(createSuccessResponse(result));
     }
   );
 
-  // GET /api/v1/admin/live/visitors - Real-time public & overview visitors telemetry radar
+  // GET /api/v1/admin/live/users/:userId/timeline - Student session & action timeline
+  app.get(
+    '/live/users/:userId/timeline',
+    {
+      preHandler: [authenticate, requireRole('moderator', 'admin')],
+    },
+    async (request, reply) => {
+      const { userId } = request.params as { userId: string };
+      const result = await adminService.getStudentTimeline(userId);
+      return reply.status(200).send(createSuccessResponse(result));
+    }
+  );
+
+  // GET /api/v1/admin/live/visitors - Real-time public & overview visitors telemetry radar (Supports range=live|24h|7d)
   app.get(
     '/live/visitors',
     {
       preHandler: [authenticate, requireRole('moderator', 'admin')],
     },
-    async (_request, reply) => {
-      const result = await adminService.getLiveVisitors();
+    async (request, reply) => {
+      const query = request.query as { range?: 'live' | '24h' | '7d' };
+      const range = query.range === '24h' || query.range === '7d' ? query.range : 'live';
+      const result = await adminService.getLiveVisitors(range);
       return reply.status(200).send(createSuccessResponse(result));
     }
   );

@@ -71,6 +71,8 @@ export interface LiveVisitorStats {
   timestamp: string;
 }
 
+export type LiveVisitorResponse = LiveVisitorStats;
+
 function resolveGeoFromRequest(ip: string, headers: Record<string, any> = {}): {
   city: string;
   region: string;
@@ -189,10 +191,19 @@ export class VisitorTrackerStore {
     try {
       const db = getDb();
       if (db) {
+        const now = new Date();
+        const expireAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7-day retention
+
         db.collection(COLLECTIONS.VISITOR_SESSIONS)
           .updateOne(
             { sessionId: visitor.sessionId },
-            { $set: { ...visitor, updatedAt: new Date() } },
+            {
+              $set: {
+                ...visitor,
+                updatedAt: now,
+                expireAt,
+              },
+            },
             { upsert: true }
           )
           .catch(() => {});
@@ -402,9 +413,107 @@ export class VisitorTrackerStore {
     };
   }
 
-  getVisitorTimeline(sessionId: string): VisitorTimelineEvent[] {
+  async getHistoricalVisitors(range: 'live' | '24h' | '7d' = 'live'): Promise<LiveVisitorResponse> {
+    if (range === 'live') {
+      return this.getLiveVisitors();
+    }
+
+    const cutoffMs = range === '24h' ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+    const cutoffDate = new Date(Date.now() - cutoffMs);
+    let visitorsList = Array.from(this.visitors.values());
+
+    try {
+      const db = getDb();
+      if (db) {
+        const docs = await db
+          .collection(COLLECTIONS.VISITOR_SESSIONS)
+          .find({
+            $or: [
+              { updatedAt: { $gte: cutoffDate } },
+              { lastPingAt: { $gte: cutoffDate.toISOString() } },
+              { createdAt: { $gte: cutoffDate } },
+            ],
+          })
+          .sort({ lastPingAt: -1 })
+          .limit(200)
+          .toArray();
+
+        if (docs.length > 0) {
+          const map = new Map<string, LiveVisitor>();
+          for (const doc of docs) {
+            const v = doc as unknown as LiveVisitor;
+            map.set(v.sessionId, {
+              ...v,
+              isActive: this.visitors.get(v.sessionId)?.isActive || false,
+              timeline: Array.isArray(v.timeline) ? v.timeline : [],
+            });
+          }
+
+          for (const [id, memVisitor] of this.visitors.entries()) {
+            map.set(id, memVisitor);
+          }
+
+          visitorsList = Array.from(map.values());
+        }
+      }
+    } catch {
+      // fallback
+    }
+
+    visitorsList.sort((a, b) => {
+      if (a.isActive && !b.isActive) return -1;
+      if (!a.isActive && b.isActive) return 1;
+      return new Date(b.lastPingAt).getTime() - new Date(a.lastPingAt).getTime();
+    });
+
+    const cityDistribution: Record<string, number> = {};
+    const deviceDistribution: Record<string, number> = {};
+    const referrerDistribution: Record<string, number> = {};
+    const sectionDistribution: Record<string, number> = {};
+
+    let activeCount = 0;
+    for (const v of visitorsList) {
+      if (v.isActive) {
+        activeCount++;
+      }
+      cityDistribution[v.city] = (cityDistribution[v.city] || 0) + 1;
+      deviceDistribution[v.deviceCategory] = (deviceDistribution[v.deviceCategory] || 0) + 1;
+      referrerDistribution[v.referrer] = (referrerDistribution[v.referrer] || 0) + 1;
+      if (v.currentSection) {
+        sectionDistribution[v.currentSection] = (sectionDistribution[v.currentSection] || 0) + 1;
+      }
+    }
+
+    return {
+      totalActiveVisitors: activeCount,
+      totalVisitorsToday: visitorsList.length,
+      peakVisitorsToday: Math.max(this.peakToday, activeCount),
+      visitors: visitorsList,
+      cityDistribution,
+      deviceDistribution,
+      referrerDistribution,
+      sectionDistribution,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  async getVisitorTimeline(sessionId: string): Promise<VisitorTimelineEvent[]> {
     const v = this.visitors.get(sessionId);
-    return v ? v.timeline : [];
+    if (v && v.timeline && v.timeline.length > 0) {
+      return v.timeline;
+    }
+
+    try {
+      const db = getDb();
+      if (db) {
+        const doc = (await db.collection(COLLECTIONS.VISITOR_SESSIONS).findOne({ sessionId })) as unknown as LiveVisitor;
+        if (doc && Array.isArray(doc.timeline)) {
+          return doc.timeline;
+        }
+      }
+    } catch {}
+
+    return [];
   }
 
   /**

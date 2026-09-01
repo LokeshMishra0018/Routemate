@@ -51,10 +51,14 @@ describe('Presence Engine & Telemetry Buffer (Unit Tests)', () => {
     expect(all.length).toBe(1);
     expect(all[0].userId).toBe('user_456');
 
-    // Remove on disconnect
+    // Remove on disconnect (Active socket is removed, offline history retained with Went Offline status)
     presenceStore.removePresence('sock_123');
     expect(presenceStore.getPresence('sock_123')).toBeNull();
-    expect(presenceStore.getAllPresence().length).toBe(0);
+    const allAfterDisconnect = presenceStore.getAllPresence();
+    expect(allAfterDisconnect.length).toBe(1);
+    expect(allAfterDisconnect[0].isOnline).toBe(false);
+    expect(allAfterDisconnect[0].currentAction).toContain('Disconnected');
+    expect(allAfterDisconnect[0].timeline.length).toBeGreaterThan(0);
   });
 
   it('should record events and enforce maximum ring buffer capacity', async () => {
